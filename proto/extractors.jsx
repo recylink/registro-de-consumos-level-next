@@ -335,6 +335,129 @@ function rcExtraerAguasDelValle(textBundle) {
   return out;
 }
 
+// ----- ESVAL parser (agua) ------------------------------------------------
+// Boleta electrónica ESVAL (Viña / V Región). Estructura del text layer:
+//   - N° Cliente: formato NNNNNN-DV (6-7 díg + guión + dígito o "K", ej.
+//     "865915-K"). En la capa de texto suele venir PEGADO a la fecha de
+//     emisión ("13-02-2026865915-K"); el patrón NNNNNN-DV no colisiona con el
+//     RUT de ESVAL (con puntos: 76.000.739-0), la Ruta de Lectura
+//     (10-143-4254-0) ni las fechas (DD-MM-YYYY).
+//   - Fechas de Lecturas: "Anterior 10/01/2026 · Actual 10/02/2026" — lecturas
+//     mensuales que caen el MISMO día en meses consecutivos → firma del ciclo.
+//   - Consumos: "A Facturar 388,00m3"; en detalle "Recolección 388,00 m3" y
+//     "Tratamiento 388,00 m3" repiten el volumen total facturado.
+//   - Monto: "Monto Total $ 1.031.116" (línea de texto), o "TOTAL A PAGAR" /
+//     "Subtotal del mes" como respaldo.
+function rcExtraerEsval(textBundle) {
+  const texto = textBundle.combined;
+  const out = { numeroCliente: "", fecha: "", periodoInicio: "", periodoFin: "", consumo: 0, costo: 0 };
+
+  // A. N° cliente — NNNNNN-DV. El cliente viene tras la fecha de emisión
+  // (DD-MM-YYYY), a veces PEGADO ("13-02-2026865915-K"): anclar en la fecha la
+  // consume primero y evita que su último dígito se cuele en el número greedy.
+  // Fallback: match suelto con lookbehind para no arrastrar un dígito previo.
+  let mCli = texto.match(/\d{2}-\d{2}-\d{4}\s*(\d{6,7}-[\dkK])(?![\d-])/);
+  if (!mCli) mCli = texto.match(/(?<!\d)(\d{6,7}-[\dkK])(?![\d-])/);
+  if (mCli) out.numeroCliente = mCli[1];
+
+  // B. Período de lectura → punto medio (mes predominante). Estrategia por capas:
+  //  1) par de fechas con el MISMO día y meses consecutivos (lecturas mensuales).
+  //  2) fallback: primer par DD/MM/YYYY con duración de ciclo válida (15-62 d).
+  const fechas = texto.match(/\b\d{2}\/\d{2}\/\d{4}\b/g) || [];
+  let periodo = null;
+  for (let i = 0; i < fechas.length && !periodo; i++) {
+    for (let j = 0; j < fechas.length; j++) {
+      if (i === j) continue;
+      const d1 = Number(fechas[i].slice(0, 2)), d2 = Number(fechas[j].slice(0, 2));
+      if (d1 !== d2) continue;
+      const p = rcPeriodoMedio(fechas[i], fechas[j]) || rcPeriodoMedio(fechas[j], fechas[i]);
+      if (p) { periodo = p; break; }
+    }
+  }
+  if (!periodo) {
+    for (let i = 0; i < fechas.length && !periodo; i++)
+      for (let j = i + 1; j < fechas.length; j++) {
+        const p = rcPeriodoMedio(fechas[i], fechas[j]) || rcPeriodoMedio(fechas[j], fechas[i]);
+        if (p) { periodo = p; break; }
+      }
+  }
+  if (periodo) {
+    out.fecha = periodo.media;
+    out.periodoInicio = periodo.inicio;
+    out.periodoFin = periodo.fin;
+  }
+
+  // C. Consumo facturado (m³). "A Facturar" → detalle "Recolección"/"Tratamiento".
+  const parseM3 = (s) => parseFloat(String(s).replace(/\./g, "").replace(",", ".")) || 0;
+  let mCons = texto.match(/A\s*Facturar\s*([\d.,]+)\s*m3/i);
+  if (!mCons) mCons = texto.match(/Recolecci[oó]n\s*([\d.,]+)\s*m3/i);
+  if (!mCons) mCons = texto.match(/Tratamiento\s*([\d.,]+)\s*m3/i);
+  if (mCons) out.consumo = parseM3(mCons[1]);
+
+  // D. Costo — "Monto Total", respaldo "Total a pagar" / "Subtotal del mes".
+  let mTot = texto.match(/Monto\s*Total\s*\$?\s*([\d.]+)/i);
+  if (!mTot) mTot = texto.match(/Total\s*a\s*Pagar\s*\$?\s*([\d.]+)/i);
+  if (!mTot) mTot = texto.match(/Subtotal del mes\s*\$?\s*([\d.]+)/i);
+  if (mTot) out.costo = parseInt(String(mTot[1]).replace(/\./g, ""), 10) || 0;
+
+  return out;
+}
+
+// ----- Chilquinta parser (electricidad) -----------------------------------
+// Boleta electrónica Chilquinta (V Región). Layout con etiquetas en el text
+// layer (a diferencia de Enel):
+//   - "N° CLIENTE: 541947 - 6" (espacios alrededor del guión).
+//   - "LECTURAS Desde 04 may 2021 al 04 jun 2021" (mes en español, minúscula).
+//   - "Electricidad consumida 1.863 kWh" = energía facturada (NO el 'Consumo'
+//     de la tabla de lecturas, que es la dif. de registros del medidor).
+//   - Total a pagar junto al vencimiento: "01 jul 2021 $ 676.022"; respaldo
+//     "asciende a $ 676.022".
+// "04 may 2021" → "04/05/2021" (formato que espera rcPeriodoMedio).
+function rcFechaTextoCL(s) {
+  const m = String(s).trim().match(/(\d{1,2})\s+([A-Za-zñÑ]{3,})\s+(\d{4})/);
+  if (!m) return null;
+  const mes = RC_MESES_CL[m[2].slice(0, 3).toUpperCase()];
+  if (!mes) return null;
+  return `${String(m[1]).padStart(2, "0")}/${mes}/${m[3]}`;
+}
+
+function rcExtraerChilquinta(textBundle) {
+  const texto = textBundle.combined;
+  const out = { numeroCliente: "", fecha: "", periodoInicio: "", periodoFin: "", consumo: 0, costo: 0 };
+
+  // A. N° Cliente — etiquetado, con espacios alrededor del guión.
+  const mCli = texto.match(/N[°º]?\s*CLIENTE:?\s*(\d{5,7})\s*-\s*([\dkK])/i);
+  if (mCli) out.numeroCliente = mCli[1] + "-" + mCli[2];
+
+  // B. Período de lectura → punto medio. Fallback: FECHA EMISIÓN.
+  const mPer = texto.match(/Desde\s+(\d{1,2}\s+[A-Za-zñÑ]{3,}\s+\d{4})\s+al\s+(\d{1,2}\s+[A-Za-zñÑ]{3,}\s+\d{4})/i);
+  let periodo = null;
+  if (mPer) {
+    const ini = rcFechaTextoCL(mPer[1]), fin = rcFechaTextoCL(mPer[2]);
+    if (ini && fin) periodo = rcPeriodoMedio(ini, fin);
+  }
+  if (periodo) {
+    out.fecha = periodo.media;
+    out.periodoInicio = periodo.inicio;
+    out.periodoFin = periodo.fin;
+  } else {
+    const mEmis = texto.match(/FECHA\s*EMISI[OÓ]N:?\s*(\d{1,2}\s+[A-Za-zñÑ]{3,}\s+\d{4})/i);
+    const f = mEmis && rcFechaTextoCL(mEmis[1]);
+    if (f) { const [d, m, y] = f.split("/"); out.fecha = `${y}-${m}-${d}`; }
+  }
+
+  // C. Consumo — "Electricidad consumida 1.863 kWh".
+  const mCons = texto.match(/Electricidad consumida\s+([\d.]+)\s*kWh/i);
+  if (mCons) out.consumo = parseInt(mCons[1].replace(/\./g, ""), 10) || 0;
+
+  // D. Costo — total a pagar junto al vencimiento; respaldo "asciende a $".
+  let mTot = texto.match(/\d{1,2}\s+[A-Za-zñÑ]{3,}\s+\d{4}\s+\$\s*([\d.]+)/);
+  if (!mTot) mTot = texto.match(/asciende a\s*\$\s*([\d.]+)/i);
+  if (mTot) out.costo = parseInt(String(mTot[1]).replace(/\./g, ""), 10) || 0;
+
+  return out;
+}
+
 // ----- Iconstruye Excel parser (replica de appscript.txt) ----------------
 const RC_EXCEL = {
   FILA_DATOS: 14,
@@ -412,10 +535,14 @@ async function rcExtract(file, provider) {
     let datos, type;
     if (provider.id === "cge") {
       datos = rcExtraerCGE(text); type = "electricidad";
+    } else if (provider.id === "chilquinta") {
+      datos = rcExtraerChilquinta(text); type = "electricidad";
     } else if (provider.id === "enel" || (provider.type === "electricidad" && provider.id !== "generic")) {
       datos = rcExtraerEnel(text); type = "electricidad";
     } else if (provider.id === "aguas-del-valle") {
       datos = rcExtraerAguasDelValle(text); type = "agua";
+    } else if (provider.id === "esval") {
+      datos = rcExtraerEsval(text); type = "agua";
     } else if (provider.id === "aguas-andinas" || provider.type === "agua") {
       datos = rcExtraerAguas(text); type = "agua";
     } else if (provider.id === "generic") {

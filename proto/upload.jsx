@@ -3,9 +3,10 @@
 const PROVIDER_TEMPLATES = [
   { id: "enel",            name: "Enel",                 type: "electricidad", initials: "E",  examples: "PDF mensual",   hasExtractor: true  },
   { id: "cge",             name: "CGE",                  type: "electricidad", initials: "C",  examples: "PDF mensual",   hasExtractor: true  },
+  { id: "chilquinta",      name: "Chilquinta",           type: "electricidad", initials: "CH", examples: "PDF mensual",   hasExtractor: true  },
   { id: "aguas-andinas",   name: "Aguas Andinas",        type: "agua",         initials: "AA", examples: "PDF mensual · Excel detalle", hasExtractor: true },
   { id: "aguas-del-valle", name: "Aguas del Valle",      type: "agua",         initials: "AV", examples: "PDF mensual",   hasExtractor: true  },
-  { id: "esval",           name: "Esval",                type: "agua",         initials: "E",  examples: "PDF mensual",   hasExtractor: false },
+  { id: "esval",           name: "Esval",                type: "agua",         initials: "E",  examples: "PDF mensual",   hasExtractor: true  },
   { id: "iconstruye-pet",  name: "Iconstruye Petróleo",  type: "combustible",  initials: "IP", examples: "PDF multi-sucursal", hasExtractor: true },
   { id: "copec",           name: "Copec",                type: "combustible",  initials: "C",  examples: "PDF · Excel",   hidden: true,  hasExtractor: false },
   { id: "shell",           name: "Shell",                type: "combustible",  initials: "S",  examples: "PDF mensual",   hidden: true,  hasExtractor: false },
