@@ -19,6 +19,13 @@
   background: var(--rl-gray-50);
 }
 
+/* Varios controles que en el prototipo eran <button> con onClick ahora son
+   links reales. Los que usan `all: unset` ya quedan sin subrayado; .prt-btn no,
+   porque define sus propios estilos sobre los del navegador. */
+a.prt-btn {
+  text-decoration: none;
+}
+
 /* ----- Aviso de instancia sin backend ----------------------------------- */
 .rc-banner {
   display: flex;
