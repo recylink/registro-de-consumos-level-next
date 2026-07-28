@@ -1,14 +1,21 @@
-import { Pendiente } from "@/components/ui/pendiente";
+import { AvisoDatos } from "@/components/ui/avisos";
+import { Subir } from "@/components/views/subir";
+import { loadSucursales } from "@/lib/data";
 
 export const metadata = { title: "Subir documento" };
 
-export default function Page() {
+export default async function SubirPage() {
+  const sucursales = await loadSucursales();
+
   return (
-    <Pendiente
-      eyebrow="Registrar consumo"
-      title="Subir documento"
-      sub="Boletas y facturas de proveedor; los datos se extraen del documento."
-      origen="proto/upload.jsx"
-    />
+    <div>
+      <AvisoDatos configured={sucursales.configured} error={sucursales.error} />
+      <Subir
+        sucursales={sucursales.data}
+        // Tope del selector de fecha de la tabla de revisión, fijado en el
+        // servidor para no depender del reloj del navegador.
+        hoy={new Date().toISOString().slice(0, 10)}
+      />
+    </div>
   );
 }
