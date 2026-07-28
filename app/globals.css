@@ -1,0 +1,8 @@
+/* Hoja global de la app Next.
+   Orden importado a propósito: tokens del design system primero, luego los
+   estilos del prototipo (que dependen de las variables --rl-*), y al final la
+   capa de autenticación. `proto.css` ya importa `tokens.css`, se deja explícito
+   acá para que el orden no dependa de ese detalle. */
+@import "./styles/tokens.css";
+@import "./styles/proto.css";
+@import "./styles/rc-auth.css";
