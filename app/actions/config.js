@@ -30,6 +30,26 @@ export async function saveSucursalAction(sucursal, { renombrarDesde } = {}) {
   });
 }
 
+/**
+ * Guarda varias sucursales de una vez: el wizard de puesta en marcha define un
+ * conjunto completo. Es aditivo (upsert por id, una por una), no un reemplazo:
+ * si ya había sucursales configuradas, no se pierden.
+ *
+ * Secuencial a propósito — el Apps Script serializa las mutaciones con un lock,
+ * así que mandarlas en paralelo solo agrega espera.
+ */
+export async function saveSucursalesAction(sucursales) {
+  return run(async () => {
+    let guardadas = 0;
+    for (const suc of sucursales || []) {
+      await upsertSucursal(suc);
+      guardadas++;
+    }
+    revalidateTag(TAGS.sucursales);
+    return { guardadas };
+  });
+}
+
 export async function deleteSucursalAction(id) {
   return run(async () => {
     await deleteSucursal(id);
