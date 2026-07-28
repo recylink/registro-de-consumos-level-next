@@ -1,7 +1,11 @@
 import "./globals.css";
+import { AppShell } from "@/components/shell/app-shell";
 
 export const metadata = {
-  title: "Registro de Consumos",
+  title: {
+    default: "Registro de Consumos",
+    template: "%s · Registro de Consumos",
+  },
   description:
     "Registra consumos de electricidad, combustible y agua por sucursal y mide su impacto en emisiones GEI.",
 };
@@ -14,7 +18,9 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body>
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }

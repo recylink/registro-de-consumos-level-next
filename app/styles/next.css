@@ -1,0 +1,51 @@
+/* Estilos propios del port a Next. Complementan proto.css, no lo reemplazan.
+   En el prototipo estos hovers eran manejadores onMouseEnter/onMouseLeave que
+   escribían style.background a mano; acá son reglas CSS, que además no obligan a
+   que el componente sea de cliente. */
+
+/* Botones de navegación de mes/año en los pickers. */
+.rc-nav-btn:hover {
+  background: var(--rl-gray-50);
+}
+
+/* Celdas de las grillas de día y mes: sin hover si están deshabilitadas o
+   seleccionadas (la selección ya tiene su propio fondo). */
+.rc-grid-cell:not(:disabled):not([aria-pressed="true"]):hover {
+  background: var(--rl-gray-50);
+}
+
+/* Opciones del menú de Select. */
+.rc-option:not(:disabled)[aria-selected="false"]:hover {
+  background: var(--rl-gray-50);
+}
+
+/* ----- Aviso de instancia sin backend ----------------------------------- */
+.rc-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  font: 500 13px/1.45 var(--rl-font-body);
+}
+.rc-banner.warning {
+  background: var(--rl-warning-50, #fff8e6);
+  color: var(--rl-warning-800, #7a5300);
+  border: 1px solid var(--rl-warning-200, #f5d9a0);
+}
+.rc-banner.error {
+  background: var(--rl-danger-50, #fdeceb);
+  color: var(--rl-danger-800, #7a1c17);
+  border: 1px solid var(--rl-danger-200, #f3bdb8);
+}
+
+/* ----- Placeholder de vista aún no portada ------------------------------ */
+.rc-todo {
+  border: 1px dashed var(--rl-gray-300);
+  border-radius: 12px;
+  padding: 28px;
+  color: var(--rl-gray-600);
+  font: 500 13.5px/1.6 var(--rl-font-body);
+  background: var(--rl-gray-50);
+}
