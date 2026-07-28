@@ -112,3 +112,129 @@ a.prt-btn {
   align-items: center;
   justify-content: center;
 }
+
+/* ----- Tooltips de gráficos ---------------------------------------------- */
+/* Compartido por el gráfico de líneas y el heatmap: en el prototipo el mismo
+   bloque de estilos inline estaba repetido en los dos componentes. */
+.rc-chart-tooltip {
+  position: absolute;
+  top: 0;
+  background: var(--rl-gray-900, #111827);
+  color: #fff;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font: 500 11px/1.4 var(--rl-font-body);
+  pointer-events: none;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+  z-index: 10;
+}
+.rc-chart-tooltip-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+  opacity: 0.85;
+  text-transform: capitalize;
+}
+.rc-chart-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* ----- Dashboard: celdas de la tabla detallada -------------------------- */
+.rc-doc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--rl-primary-900);
+  font: 600 12px/1 var(--rl-font-display);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--rl-primary-200);
+  background: var(--rl-primary-50);
+}
+.rc-doc-attach {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px dashed var(--rl-gray-300);
+  color: var(--rl-gray-600);
+  font: 500 12px/1 var(--rl-font-body);
+}
+.rc-doc-attach:hover {
+  border-color: var(--rl-primary-300);
+  color: var(--rl-primary-900);
+}
+/* Editor inline dentro de una celda. */
+.rc-cell-input {
+  width: 100%;
+  height: 44px;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0 16px;
+  font: 500 13px/1 var(--rl-font-body);
+  color: var(--rl-gray-900);
+}
+.rc-cell-input.num {
+  text-align: right;
+}
+.rc-cell-input.compact {
+  height: 32px;
+  padding: 0 8px;
+}
+
+/* ----- Dashboard --------------------------------------------------------- */
+.rc-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 18px;
+}
+@media (max-width: 1100px) {
+  .rc-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* El KPI que navega es un <a>: hereda el estilo de la tarjeta y pierde el
+   subrayado y el color de link. */
+a.prt-kpi {
+  text-decoration: none;
+  color: inherit;
+}
+
+.rc-tabla-aviso {
+  padding: 8px 22px;
+  background: var(--rl-warning-50);
+  border-bottom: 1px solid var(--rl-warning-100);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 12px/1.4 var(--rl-font-body);
+  color: var(--rl-warning-700);
+}
+
+.rc-tabla-pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 22px;
+  border-top: 1px solid var(--rl-gray-100);
+  background: var(--rl-gray-50);
+}
+
+/* La píldora que lleva a configurar subcategorías es un link. */
+a.prt-pill {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
