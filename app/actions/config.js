@@ -6,16 +6,27 @@ import { run } from "@/lib/result";
 import { deleteSucursal, upsertSucursal, writeSucursales } from "@/lib/sheets/sucursales";
 import { writeEmissions } from "@/lib/sheets/emissions";
 import { writeFotoNotifEmails } from "@/lib/sheets/config-store";
+import { renameSucursalInRecords } from "@/lib/sheets/records";
 
 /**
  * Guarda una sola sucursal. Es la vía normal: no pisa lo que otra sesión haya
  * guardado sobre las demás sucursales.
+ *
+ * `renombrarDesde` (opcional) es el nombre anterior: si viene, los registros
+ * históricos de esa sucursal quedan con el nombre nuevo. Se hace ANTES del
+ * upsert, para que un fallo a mitad de camino deje la configuración vieja
+ * coherente con las filas viejas.
  */
-export async function saveSucursalAction(sucursal) {
+export async function saveSucursalAction(sucursal, { renombrarDesde } = {}) {
   return run(async () => {
+    let renombrados = 0;
+    if (renombrarDesde && renombrarDesde !== sucursal.nombre) {
+      renombrados = await renameSucursalInRecords(renombrarDesde, sucursal.nombre);
+    }
     await upsertSucursal(sucursal);
     revalidateTag(TAGS.sucursales);
-    return {};
+    if (renombrados) revalidateTag(TAGS.records);
+    return { renombrados };
   });
 }
 

@@ -56,3 +56,59 @@ a.prt-btn {
   font: 500 13.5px/1.6 var(--rl-font-body);
   background: var(--rl-gray-50);
 }
+
+/* ----- Registro manual --------------------------------------------------- */
+/* El botón de adjuntar factura tenía su hover como onMouseEnter/onMouseLeave
+   escribiendo style.borderColor y style.color. */
+.rc-dashed-btn {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1.5px dashed var(--rl-gray-300);
+  border-radius: 8px;
+  color: var(--rl-gray-600);
+  font: 500 13px/1 var(--rl-font-body);
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.rc-dashed-btn:hover {
+  border-color: var(--rl-primary-300);
+  color: var(--rl-primary-900);
+}
+
+/* Numerito de orden de un consumo dentro del lote. */
+.rc-step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--rl-primary-50);
+  color: var(--rl-primary-900);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 13px/1 var(--rl-font-display);
+}
+
+/* Valor destacado en las tarjetas de resumen. */
+.rc-dato {
+  font: 600 15px/1 var(--rl-font-display);
+  margin-top: 2px;
+}
+.rc-dato.strong {
+  font-weight: 700;
+}
+
+.rc-success-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: var(--rl-success-50);
+  color: var(--rl-success-700);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

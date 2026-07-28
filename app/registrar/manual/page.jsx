@@ -1,14 +1,25 @@
-import { Pendiente } from "@/components/ui/pendiente";
+import { AvisoDatos } from "@/components/ui/avisos";
+import { ManualFlujo } from "@/components/views/manual";
+import { loadRecords, loadSucursales } from "@/lib/data";
+import { currentMonthKey } from "@/lib/domain/periods";
 
 export const metadata = { title: "Registro manual" };
 
-export default function Page() {
+export default async function ManualPage() {
+  const [sucursales, records] = await Promise.all([loadSucursales(), loadRecords()]);
+
   return (
-    <Pendiente
-      eyebrow="Registrar consumo"
-      title="Registro manual"
-      sub="Un consumo a la vez con un formulario corto."
-      origen="proto/manual.jsx"
-    />
+    <div>
+      <AvisoDatos configured={sucursales.configured} error={sucursales.error} />
+      <ManualFlujo
+        sucursales={sucursales.data}
+        // Los registros solo se usan para detectar consumos atípicos contra el
+        // promedio histórico de la misma sucursal, tipo y subcategoría.
+        records={records.data}
+        // El mes tope del selector se fija en el servidor, para que el límite no
+        // dependa del reloj del navegador.
+        mesActual={currentMonthKey()}
+      />
+    </div>
   );
 }
