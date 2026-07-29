@@ -4,8 +4,10 @@ Versión formal del producto: Next.js 16 (App Router) + React 19 en JS, desplega
 en Vercel. Reemplaza al prototipo de `index.html` + `proto/*.jsx`, que cargaba
 React y Babel por CDN y compilaba JSX en el navegador.
 
-El prototipo sigue en el repo (`index.html`, `proto/`, `screens/`) como
-referencia de lectura durante la migración. No participa del build de Next.
+El prototipo quedó archivado en **`_legacy/`** (`index.html`, `proto/`, `screens/`
+y sus dos hojas de estilo) el 2026-07-29, al terminar el port. Sigue en el repo
+como referencia histórica y no participa del build. Los comentarios del código
+citan los archivos originales como `proto/x.jsx`: hoy son `_legacy/proto/x.jsx`.
 
 ## Estado de la migración
 
