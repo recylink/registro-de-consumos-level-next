@@ -16,8 +16,11 @@ import { useToast } from "@/components/ui/toast";
 import { useMedidores } from "@/components/medidores/estado";
 import { deleteMedidorDocAction, uploadMedidorDocAction } from "@/app/actions/medidores";
 import { errorArchivo } from "@/lib/domain/archivos";
+import { monthLabelShort } from "@/lib/domain/format";
 import { meterLabel } from "@/lib/domain/medidores";
-import { medUnit, meterReadingFor, priceFor, validateReading } from "@/lib/domain/medidores-calc";
+import {
+  medUnit, meterReadingFor, monthsInheriting, priceFor, priceInfo, validateReading,
+} from "@/lib/domain/medidores-calc";
 
 export const DOC_META = {
   factura: { label: "Factura", icon: "receipt_long" },
@@ -87,28 +90,86 @@ export function LecturaCell({ meterId, month }) {
   );
 }
 
-/** Precio unitario de (sucursal, tipo, mes). Compartido por matriz y mensual. */
-export function MedPriceInput({ suc, type, month, compact }) {
-  const { M, setPrice } = useMedidores();
-  const precio = priceFor(M.prices, suc, type, month);
-  // ¿el precio que aplica es heredado de un mes anterior?
-  const exacto = (M.prices || []).some(
-    (p) => p.sucursal === suc && p.type === type && p.month === month,
+/**
+ * Precio unitario de (sucursal, tipo, mes). Compartido por matriz y mensual.
+ *
+ * El precio es una función escalonada: lo que se escribe acá rige desde este mes
+ * hacia adelante. La celda distingue tres estados —propio, heredado y sin
+ * tarifa— porque antes los tres se veían igual: un número negro sin más.
+ *
+ * `monthsView` (opcional, lo pasa la matriz) permite dos cosas que necesitan
+ * saber qué meses están a la vista: advertir a cuántos meses arrastra editar una
+ * tarifa vieja, y ofrecer aplicarla hacia atrás cuando hay meses previos sin
+ * precio.
+ */
+export function MedPriceInput({ suc, type, month, compact, monthsView }) {
+  const { M, setPrice, applyPriceFrom } = useMedidores();
+  const toast = useToast();
+  const { precio, desde, propio } = priceInfo(M.prices, suc, type, month);
+  const unidad = medUnit(type) || "u";
+
+  // Meses a la vista, anteriores a este, que quedaron sin tarifa. Solo aparece la
+  // opción de estirar el precio hacia atrás si de verdad hay algo que cubrir.
+  const previosSinPrecio = (monthsView || []).filter(
+    (m) => m < month && priceFor(M.prices, suc, type, m) == null,
   );
+  const primeroSinPrecio = previosSinPrecio.length ? previosSinPrecio[0] : null;
+
+  const onChange = (v) => {
+    setPrice({ sucursal: suc, type, month, precio: v });
+    // Cambiar una tarifa vieja recalcula el costo de todos los meses que la
+    // heredan. Se dice explícitamente en vez de dejarlo pasar en silencio.
+    const arrastra = monthsInheriting(M.prices, suc, type, month, monthsView);
+    if (arrastra.length) {
+      toast.info(
+        "Precio aplicado a " + (arrastra.length + 1) + " meses",
+        "Rige desde " + monthLabelShort(month) + " hasta " + monthLabelShort(arrastra[arrastra.length - 1]) +
+          ", que no tienen precio propio.",
+      );
+    }
+  };
+
+  const estirar = () => {
+    applyPriceFrom({ sucursal: suc, type, month: primeroSinPrecio, precio });
+    toast.success(
+      "Precio aplicado hacia atrás",
+      `Rige desde ${monthLabelShort(primeroSinPrecio)}.`,
+    );
+  };
 
   return (
     <div className={"rc-med-price" + (compact ? " compact" : "")}>
       <NumericInput
         value={precio == null ? "" : precio}
-        placeholder="0"
-        suffix={compact ? null : "$/" + (medUnit(type) || "u")}
-        onChange={(v) => setPrice({ sucursal: suc, type, month, precio: v })}
+        placeholder={compact ? "sin precio" : "0"}
+        suffix={compact ? null : "$/" + unidad}
+        onChange={onChange}
         style={{ height: 32, textAlign: "right" }}
       />
-      {precio != null && !exacto && (
-        <span className="rc-med-price-inh" title="Heredado de un mes anterior">
+      {precio == null ? (
+        <span
+          className="rc-med-price-sin"
+          title={`Sin tarifa para ${monthLabelShort(month)}: el costo de este mes no se puede calcular. Escribe el precio $/${unidad}.`}
+        >
+          <Icon name="warning" size={12} />
+        </span>
+      ) : !propio ? (
+        <span
+          className="rc-med-price-inh"
+          title={`Heredado desde ${monthLabelShort(desde)}. Escribe un valor para fijar otra tarifa a partir de ${monthLabelShort(month)}.`}
+        >
           <Icon name="info" size={12} />
         </span>
+      ) : null}
+      {precio != null && primeroSinPrecio && (
+        <button
+          type="button"
+          className="rc-med-price-back"
+          onClick={estirar}
+          title={`Aplicar $${precio}/${unidad} desde ${monthLabelShort(primeroSinPrecio)}: ${previosSinPrecio.length} mes(es) antes de este quedaron sin tarifa.`}
+        >
+          <Icon name="arrow_back" size={12} />
+        </button>
       )}
     </div>
   );

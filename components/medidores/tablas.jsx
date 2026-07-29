@@ -101,7 +101,7 @@ export function MatrizTab({ suc, type, meters, monthsView, records }) {
               </th>
               {monthsView.map((mk) => (
                 <th key={mk} colSpan={4}>
-                  <MedPriceInput suc={suc} type={type} month={mk} compact />
+                  <MedPriceInput suc={suc} type={type} month={mk} monthsView={monthsView} compact />
                 </th>
               ))}
             </tr>

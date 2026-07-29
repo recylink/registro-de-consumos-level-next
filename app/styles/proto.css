@@ -1783,6 +1783,18 @@ textarea.prt-input { height: auto; padding: 12px 14px; line-height: 1.5; resize:
 .rc-med-price.compact { max-width: 150px; margin: 0 auto; }
 .rc-med-price .prt-input-wrap { flex: 1; }
 .rc-med-price-inh { position: absolute; right: -4px; top: -6px; display: inline-flex; color: var(--rl-gray-400); }
+/* Mes sin tarifa: su costo no se calcula. */
+.rc-med-price-sin { position: absolute; right: -4px; top: -6px; display: inline-flex; color: var(--rl-warning-600, #B45309); }
+/* Estirar el precio a los meses previos que quedaron sin tarifa. */
+.rc-med-price-back {
+  all: unset; cursor: pointer;
+  position: absolute; left: -6px; top: -6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 999px;
+  background: var(--rl-primary-50); color: var(--rl-primary-900);
+  border: 1px solid var(--rl-gray-200);
+}
+.rc-med-price-back:hover { background: var(--rl-primary-900); color: #fff; }
 
 /* Strip de precio en Mensual */
 .rc-med-mensual-price {

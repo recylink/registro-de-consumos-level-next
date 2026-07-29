@@ -169,6 +169,7 @@ export function MedidoresProvider({ inicial, children }) {
     reintentar: flush,
     setReading: (args) => setM((m) => med.setReading(m, args)),
     setPrice: (args) => setM((m) => med.setPrice(m, args)),
+    applyPriceFrom: (args) => setM((m) => med.applyPriceFrom(m, args)),
     setDoc: (args) => setM((m) => med.setDoc(m, args)),
     addMeter: (args) => setM((m) => med.addMeter(m, args)),
     editMeter: (id, patch) => setM((m) => med.editMeter(m, id, patch)),
