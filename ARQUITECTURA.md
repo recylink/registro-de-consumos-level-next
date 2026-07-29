@@ -14,7 +14,7 @@ referencia de lectura durante la migración. No participa del build de Next.
 | F0 | Andamiaje Next (build, CSS, fuentes, env) | listo |
 | F1 | Capa de datos server-side (`lib/`, `app/actions/`) | listo |
 | F2 | Rutas del App Router + shell como layout | listo |
-| F3 | Port de las vistas | 14 de 16 · falta Medidores |
+| F3 | Port de las vistas | listo (16 de 16) |
 | F4 | Extractores PDF/XLSX por npm (sin CDN) | listo |
 | F5 | Deploy en Vercel | pendiente (requiere login) |
 
@@ -22,13 +22,35 @@ referencia de lectura durante la migración. No participa del build de Next.
 
 Inicio · Dashboard · Matriz de carga · Impacto · Factores · Metas · Registrar
 (hub) · Registro manual · Subir documento (+ revisión) · Tomar foto (+ completar)
-· Configuración · Editar sucursal · Puesta en marcha.
+· Configuración · Editar sucursal · Puesta en marcha · **Medidores** · **Medidores
+móvil**.
 
-Pendiente: **Medidores** y **Medidores móvil** (`proto/medidores.jsx`, 1.429
-líneas + `proto/medidores-calc.jsx`). El cálculo ya está portado en
-`lib/domain/medidores-calc.js` y los Server Actions en `app/actions/medidores.js`;
-falta la interfaz (pestañas resumen/matriz/mensual/pagos, alta de medidores,
-export a Excel y la vista de terreno).
+Nada se ha verificado todavía contra datos reales: el port se validó con datos
+sintéticos y con el build.
+
+## Módulo Medidores
+
+Es la única pantalla con edición celda por celda (una lectura por medidor y mes),
+y por eso la que más se aparta del resto:
+
+- **El estado editable vive en el cliente.** `components/medidores/estado.jsx`
+  siembra el módulo con lo que leyó el servidor y desde ahí manda el navegador,
+  con guardado automático a los 900ms (el Apps Script reescribe las tres hojas por
+  escritura y serializa con un lock, así que no se puede guardar por tecla). Los
+  guardados se encolan y un fallo se avisa por toast; en el prototipo un error de
+  guardado era solo un `console.error`.
+- **La selección no es parte del documento.** Sucursal, tipo, pestaña y período
+  son estado de la pantalla. En el prototipo vivían en el mismo objeto que se
+  sincronizaba con la planilla.
+- **El Excel se arma en el servidor** (`lib/reportes/medidores-excel.js` +
+  `exportMedidoresExcelAction`) y vuelve en base64: la librería `xlsx` (~400 kB) no
+  entra al bundle del navegador. El módulo lo manda el cliente, no se relee de la
+  planilla, para no exportar una lectura vieja recién escrita.
+- **El reporte imprimible es una ruta** (`/medidores/reporte`,
+  `lib/reportes/medidores-html.js`). Antes se generaba con `document.write` sobre
+  una ventana nueva, así que existía solo mientras esa pestaña viviera. Ahora es un
+  link con parámetros; la pantalla fuerza el guardado pendiente antes de abrirlo,
+  porque el reporte lee de la planilla.
 
 ## Dónde vive qué
 
@@ -135,3 +157,7 @@ documentadas en el código y en el commit que las arregla.
 | `apps-script.gs` | Traía hardcodeado el ID de la planilla de otra instancia. |
 | `proto/dashboard.jsx` | El botón "Crear nueva" de subcategorías no persistía nada. |
 | `proto/metas.jsx` | Usaba el icono `history`, que no existe en el set. |
+| `proto/medidores.jsx` | Un fallo al guardar lecturas era un `console.error`: la vista móvil seguía diciendo "Las lecturas se guardan automáticamente". |
+| `proto/medidores.jsx` | El reporte calculaba la diferencia contra las boletas (`difChip`) y nunca la mostraba. Ahora tiene su sección. |
+| `proto/medidores.jsx` | La preview de la foto de respaldo creaba un `objectURL` que nunca se liberaba. |
+| `proto/medidores.jsx` | `PriceEditor` era un componente completo que nadie usaba (el precio se edita con `MedPriceInput`). No se portó. |

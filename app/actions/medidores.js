@@ -6,6 +6,8 @@ import { run } from "@/lib/result";
 import { writeMedidores } from "@/lib/sheets/medidores";
 import { getDriveFolders, medidorFolder } from "@/lib/drive-folders";
 import { meterFolderName, trashInDrive, uploadToDrive } from "@/lib/drive";
+import { loadRecords } from "@/lib/data";
+import { medidoresWorkbook } from "@/lib/reportes/medidores-excel";
 
 /** Guarda medidores, lecturas y precios (reescritura de las tres hojas). */
 export async function saveMedidoresAction(M) {
@@ -46,5 +48,20 @@ export async function deleteMedidorDocAction(fileId) {
     await trashInDrive(fileId);
     revalidateTag(TAGS.medidores);
     return {};
+  });
+}
+
+/**
+ * Arma el Excel del módulo y lo devuelve en base64.
+ *
+ * El módulo (`M`) llega del cliente y no se lee de la planilla a propósito: la
+ * pantalla guarda con debounce, así que exportar justo después de escribir una
+ * lectura tomaría el valor viejo. Los registros globales sí salen del servidor,
+ * porque esta pantalla no los edita.
+ */
+export async function exportMedidoresExcelAction({ M, sucursal, tipo, meses }) {
+  return run(async () => {
+    const records = await loadRecords();
+    return medidoresWorkbook({ M, records: records.data, sucursal, tipo, meses });
   });
 }
