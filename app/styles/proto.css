@@ -1801,6 +1801,26 @@ textarea.prt-input { height: auto; padding: 12px 14px; line-height: 1.5; resize:
 }
 .rc-med-cellmsg.warn  { color: var(--rl-warning-600, #B45309); }
 .rc-med-cellmsg.error { color: var(--rl-error-500); }
+/* Confirmación de que ESTA celda quedó escrita en la planilla. */
+.rc-med-cellmsg.ok    { color: var(--rl-success-600, #059669); }
+
+/* Indicador de guardado del módulo */
+.rc-med-save {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 500 12px/1 var(--rl-font-body);
+  color: var(--rl-gray-500);
+  white-space: nowrap;
+}
+.rc-med-save .prt-spinner { width: 13px; height: 13px; border-width: 2px; }
+.rc-med-save.ok        { color: var(--rl-success-700, #047857); }
+.rc-med-save.pendiente { color: var(--rl-warning-700, #B45309); }
+.rc-med-save.error     { color: var(--rl-error-600, #DC2626); }
+.rc-med-save-retry {
+  all: unset; cursor: pointer;
+  font: 600 12px/1 var(--rl-font-body);
+  color: var(--rl-error-600, #DC2626);
+  text-decoration: underline;
+}
 
 /* Footer matriz */
 .rc-med-foot td { background: var(--rl-gray-25); border-top: 1.5px solid var(--rl-gray-200); border-bottom: none; }

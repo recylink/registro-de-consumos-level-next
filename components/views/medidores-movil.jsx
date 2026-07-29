@@ -14,13 +14,14 @@ import { Select } from "@/components/ui/controls";
 import { EmptyState, Field } from "@/components/ui/layout";
 import { LecturaCell, RespaldoUploader } from "@/components/medidores/celdas";
 import { MedidoresProvider, useMedidores } from "@/components/medidores/estado";
+import { IndicadorGuardado } from "@/components/medidores/guardado";
 import { fmtNum, monthLabelShort } from "@/lib/domain/format";
 import { MED_TYPE_OPTS, metersFor } from "@/lib/domain/medidores";
 import { consumoFor, isFirstReading, medUnit, meterReadingFor } from "@/lib/domain/medidores-calc";
 import { activeSucNames } from "@/lib/domain/sucursales";
 
 function MovilInterior({ sucursales, mesActual, meses }) {
-  const { M, guardando } = useMedidores();
+  const { M } = useMedidores();
   const [suc, setSuc] = useState("");
   const [type, setType] = useState("");
   const [month, setMonth] = useState(mesActual);
@@ -104,19 +105,8 @@ function MovilInterior({ sucursales, mesActual, meses }) {
               </div>
             );
           })}
-          <div
-            className="prt-hint"
-            style={{ fontSize: 12, marginTop: 4, display: "flex", gap: 6, alignItems: "center" }}
-          >
-            {guardando ? (
-              <>
-                <span className="prt-spinner" /> Guardando…
-              </>
-            ) : (
-              <>
-                <Icon name="check" size={14} /> Las lecturas se guardan automáticamente.
-              </>
-            )}
+          <div style={{ marginTop: 4 }}>
+            <IndicadorGuardado compact />
           </div>
         </div>
       )}

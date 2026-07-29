@@ -18,6 +18,7 @@ import { Btn, Select } from "@/components/ui/controls";
 import { EmptyState, SectionHead } from "@/components/ui/layout";
 import { useToast } from "@/components/ui/toast";
 import { MedidoresProvider, useMedidores } from "@/components/medidores/estado";
+import { IndicadorGuardado } from "@/components/medidores/guardado";
 import { MedManageModal } from "@/components/medidores/gestionar";
 import { ResumenTab } from "@/components/medidores/resumen";
 import { MatrizTab, MensualTab, PagosTab } from "@/components/medidores/tablas";
@@ -225,6 +226,7 @@ function MedidoresInterior({ records, sucursales, mesActual, meses }) {
         sub="Registra lecturas físicas por medidor, calcula consumo y costo, y compáralos con el consumo global registrado. Puedes configurar qué medidores son facturables y cuáles no. Estas lecturas y consumos no aportan al cálculo de impacto ambiental."
         right={
           <div className="prt-row" style={{ gap: 8 }}>
+            <IndicadorGuardado />
             {listo && meters.length > 0 && (
               <BotonExcel sucursal={sel.sucursal} type={sel.type} meses={monthsView} />
             )}

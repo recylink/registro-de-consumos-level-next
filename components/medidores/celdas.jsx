@@ -27,8 +27,13 @@ export const DOC_META = {
 
 /** Lectura de un (medidor, mes), con validación contra la lectura anterior. */
 export function LecturaCell({ meterId, month }) {
-  const { M, setReading } = useMedidores();
+  const { M, estado, setReading } = useMedidores();
+  const toast = useToast();
   const [msg, setMsg] = useState(null); // { kind, text }
+  // Momento en que esta celda dejó un cambio sin escribir. Cuando el provider
+  // confirma un guardado posterior, la celda muestra su propio visto: el
+  // indicador global dice "se guardó algo", esto dice "se guardó lo tuyo".
+  const cambiadaEn = useRef(null);
   const guardada = meterReadingFor(M.readings, meterId, month);
 
   const onChange = (v) => {
@@ -36,21 +41,46 @@ export function LecturaCell({ meterId, month }) {
     setMsg(
       res.error ? { kind: "error", text: res.error } : res.warn ? { kind: "warn", text: res.warn } : null,
     );
-    if (res.ok) setReading({ meterId, month, lectura: v });
+    if (res.ok) {
+      cambiadaEn.current = Date.now();
+      setReading({ meterId, month, lectura: v });
+    }
   };
+
+  // Un valor rechazado no se guarda en ninguna parte y al salir del campo el
+  // input vuelve al último valor válido. Sin este aviso, el usuario ve su número
+  // desaparecer y no sabe por qué.
+  const onBlur = () => {
+    if (msg && msg.kind === "error") {
+      toast.error("Lectura no guardada", msg.text);
+      setMsg(null);
+    }
+  };
+
+  useEffect(() => {
+    if (estado.fase !== "guardado" || !cambiadaEn.current) return;
+    if (estado.ts < cambiadaEn.current) return;
+    cambiadaEn.current = null;
+    setMsg({ kind: "ok", text: "Guardado en la planilla" });
+    const t = setTimeout(() => setMsg((m) => (m && m.kind === "ok" ? null : m)), 2200);
+    return () => clearTimeout(t);
+  }, [estado.fase, estado.ts]);
+
+  const icono = msg && (msg.kind === "error" ? "error" : msg.kind === "ok" ? "check_circle" : "warning");
 
   return (
     <div className="rc-med-lectura">
       <NumericInput
         value={guardada == null ? "" : guardada}
         onChange={onChange}
+        onBlur={onBlur}
         placeholder="—"
         error={msg && msg.kind === "error"}
         style={{ height: 34, textAlign: "right" }}
       />
       {msg && (
         <span className={"rc-med-cellmsg " + msg.kind} title={msg.text}>
-          <Icon name={msg.kind === "error" ? "error" : "warning"} size={12} />
+          <Icon name={icono} size={12} fill={msg.kind === "ok"} />
         </span>
       )}
     </div>
