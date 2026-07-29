@@ -1,0 +1,16 @@
+# Nada de esto participa del build: no hace falta subirlo en cada deploy.
+
+# Prototipo archivado y material de diseño.
+_legacy/
+_design_source/
+design-canvas.jsx
+Registro de Consumos · Wireframes.html
+styles.css
+
+# Backend: vive pegado en el editor de Apps Script, no en el deploy.
+apps-script.gs
+appscripts/
+
+# Documentación del repo.
+ARQUITECTURA.md
+CONTEXT.md
