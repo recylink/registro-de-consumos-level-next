@@ -12,6 +12,14 @@ const nextConfig = {
   // pdfjs, que hace resolución dinámica de archivos.
   serverExternalPackages: ["pdfjs-dist", "xlsx"],
 
+  // pdf.mjs carga su worker con un import dinámico de ruta calculada, así que el
+  // trazado de dependencias no lo ve y el archivo no viajaba en la función: al
+  // procesar un documento fallaba con "Setting up fake worker failed: Cannot find
+  // module '.../pdf.worker.mjs'". Se incluye a mano en la ruta que extrae.
+  outputFileTracingIncludes: {
+    "/registrar/subir": ["./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"],
+  },
+
   experimental: {
     serverActions: {
       // Los adjuntos (facturas, boletas, fotos) viajan dentro del FormData de un
