@@ -370,3 +370,13 @@ a.prt-pill {
   border: 1px solid var(--rl-error-200);
   color: var(--rl-error-700);
 }
+
+/* El input de archivo cubre toda la zona de captura de foto. */
+.rc-foto-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
