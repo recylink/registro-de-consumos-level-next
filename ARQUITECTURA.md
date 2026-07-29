@@ -120,11 +120,17 @@ proveedor no obliga a redeployar la app.
 3. Implementar → Nueva implementación → Aplicación web, ejecutar como **yo**,
    acceso **cualquier usuario** → autorizar → copiar la URL `/exec`.
 4. Una carpeta raíz en Drive. Copiar su ID (el tramo después de `/folders/`).
-5. Provisión (idempotente):
+5. Provisión (idempotente). **Sin `-X POST`**: el `/exec` responde 302 al
+   `googleusercontent` que sirve el resultado, y `-X` fuerza a repetir el POST
+   contra ese destino, que responde 411 (o una página HTML de Google). Con `-d`
+   la primera petición ya es POST y el redirect se sigue como GET, que es lo que
+   Apps Script espera:
    ```sh
-   curl -L -X POST "<URL>/exec" -H "Content-Type: text/plain" \
+   curl -sL "<URL>/exec" -H "Content-Type: text/plain" \
      -d '{"action":"setup","rootFolderId":"<ID de la carpeta raíz>"}'
    ```
+   Con payloads que lleven base64 o acentos, mándalos desde archivo
+   (`--data-binary @payload.json`) para que no los rompa el shell.
 6. `cp .env.local.example .env.local` y poner `APPS_SCRIPT_URL`.
 7. Verificar: `curl -s localhost:3000/api/health` debe responder con
    `"version": "v4"`.
