@@ -15,6 +15,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { useMedidores } from "@/components/medidores/estado";
 import { deleteMedidorDocAction, uploadMedidorDocAction } from "@/app/actions/medidores";
+import { errorArchivo } from "@/lib/domain/archivos";
 import { meterLabel } from "@/lib/domain/medidores";
 import { medUnit, meterReadingFor, priceFor, validateReading } from "@/lib/domain/medidores-calc";
 
@@ -144,6 +145,11 @@ function useBorrarDoc(meterId, month, kind, doc) {
 
 /** Sube un archivo de medidor a Drive y devuelve el documento guardado. */
 async function subirDoc({ file, kind, meter, month }) {
+  // Sobre el tope, el Server Action corta el cuerpo del request y el error
+  // vuelve sin mensaje: mejor devolver el problema como resultado normal.
+  const problema = errorArchivo(file);
+  if (problema) return { ok: false, error: problema };
+
   const fd = new FormData();
   fd.set("file", file);
   fd.set("kind", kind);

@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/toast";
 import { submitManualAction } from "@/app/actions/records";
 import { TYPES, subcatLabel } from "@/lib/domain/catalog";
 import { detectAnomaly } from "@/lib/domain/anomalia";
+import { errorArchivo, errorLote, tamanoLegible } from "@/lib/domain/archivos";
 import { fmtCLP, fmtMonth, fmtNum } from "@/lib/domain/format";
 import { nextEntryId, nextRecordId } from "@/lib/domain/ids";
 import {
@@ -99,6 +100,7 @@ function AdjuntarFactura({ file, onPick }) {
           >
             {file.name}
           </span>
+          <span className="prt-hint" style={{ whiteSpace: "nowrap" }}>{tamanoLegible(file.size)}</span>
           <Btn size="sm" kind="ghost" onClick={() => inputRef.current?.click()}>Cambiar</Btn>
           <Btn size="sm" kind="ghost" onClick={() => onPick(null)} icon="close" title="Quitar archivo" />
         </div>
@@ -292,6 +294,15 @@ export function ManualFlujo({ sucursales, records, mesActual }) {
   // subcategoría, se propone el proveedor configurado para esa sucursal. Se
   // detiene en cuanto el usuario elige uno a mano.
   const cambiarConsumo = (id, patch) => {
+    // Un adjunto gigante hace estallar el límite de cuerpo del Server Action al
+    // guardar, y el error llega al navegador sin mensaje. Se rechaza acá.
+    if (patch.factura) {
+      const problema = errorArchivo(patch.factura);
+      if (problema) {
+        toast.error("Archivo demasiado grande", problema);
+        return;
+      }
+    }
     setDraft((d) => ({
       ...d,
       entries: d.entries.map((e) => {
@@ -335,6 +346,14 @@ export function ManualFlujo({ sucursales, records, mesActual }) {
   };
 
   const confirmar = async () => {
+    // El lote entero (registros + adjuntos) viaja en un solo request: si la suma
+    // de facturas se pasa del límite, se avisa antes de enviar.
+    const excede = errorLote(draft.entries.map((e) => e.factura));
+    if (excede) {
+      toast.error("Los adjuntos del lote son demasiado grandes", excede);
+      return;
+    }
+
     setGuardando(true);
     const cantidad = draft.entries.length;
 

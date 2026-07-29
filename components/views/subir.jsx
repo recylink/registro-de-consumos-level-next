@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/toast";
 import { SubirPreview } from "@/components/views/subir-preview";
 import { extraerDocumentoAction } from "@/app/actions/extraer";
 import { submitUploadAction } from "@/app/actions/records";
+import { errorArchivo, errorLote } from "@/lib/domain/archivos";
 import { TYPES } from "@/lib/domain/catalog";
 import { nextRecordId } from "@/lib/domain/ids";
 import { proveedoresDisponibles } from "@/lib/domain/proveedores";
@@ -266,20 +267,39 @@ export function Subir({ sucursales, hoy }) {
 
   const agregar = async (files) => {
     if (!files.length) return;
-    const nuevos = files.map((file) => ({
-      id: nextRecordId(),
-      name: file.name,
-      size: file.size,
-      kind: tipoDeArchivo(file.name),
-      status: "procesando",
-      file,
-      rows: [],
-    }));
+    // Un archivo que excede el tope no llega al Server Action: el request se
+    // cortaría por límite de cuerpo y el error volvería sin mensaje. Entra a la
+    // cola marcado como error, así se ve por qué quedó fuera.
+    const grandes = files.filter((f) => errorArchivo(f));
+    const aceptados = files.filter((f) => !errorArchivo(f));
+    const nuevos = [
+      ...aceptados.map((file) => ({
+        id: nextRecordId(),
+        name: file.name,
+        size: file.size,
+        kind: tipoDeArchivo(file.name),
+        status: "procesando",
+        file,
+        rows: [],
+      })),
+      ...grandes.map((file) => ({
+        id: nextRecordId(),
+        name: file.name,
+        size: file.size,
+        kind: tipoDeArchivo(file.name),
+        status: "error",
+        error: errorArchivo(file),
+        file: null,
+        rows: [],
+      })),
+    ];
     setCola((c) => [...c, ...nuevos]);
+    for (const f of grandes) toast.error("Archivo demasiado grande", errorArchivo(f));
 
     // Uno por uno: así un archivo que falla no arrastra a los demás, y el
     // servidor no recibe cinco PDFs a la vez.
     for (const item of nuevos) {
+      if (!item.file) continue; // rechazado por tamaño
       const fd = new FormData();
       fd.set("file", item.file);
       fd.set("provider", JSON.stringify(proveedor));
@@ -350,8 +370,25 @@ export function Subir({ sucursales, hoy }) {
   };
 
   const confirmar = async () => {
-    setGuardando(true);
     const guardables = rows.filter((r) => r.status !== "error");
+
+    // Todos los documentos de la cola se suben en el mismo request; si la suma
+    // se pasa del límite, hay que avisarlo antes de enviarlo.
+    const adjuntos = [];
+    const vistos = new Set();
+    for (const f of cola) {
+      if (!f.file || vistos.has(f.name)) continue;
+      if (!guardables.some((r) => r.sourceFile === f.name)) continue;
+      vistos.add(f.name);
+      adjuntos.push(f.file);
+    }
+    const excede = errorLote(adjuntos);
+    if (excede) {
+      toast.error("Los documentos son demasiado grandes para un solo envío", excede);
+      return;
+    }
+
+    setGuardando(true);
 
     const fd = new FormData();
     fd.set("providerId", proveedor?.id || "");

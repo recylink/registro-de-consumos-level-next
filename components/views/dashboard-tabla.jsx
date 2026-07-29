@@ -19,6 +19,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { useAccion } from "@/components/use-accion";
 import { attachDocumentAction, editRecordAction } from "@/app/actions/records";
+import { errorArchivo } from "@/lib/domain/archivos";
 import { TYPES, subcatLabel } from "@/lib/domain/catalog";
 import { fmtCLP, fmtMonth, fmtNum } from "@/lib/domain/format";
 import { getProviderOptionsFor, getSubcatsFor } from "@/lib/domain/sucursales";
@@ -294,6 +295,11 @@ export function DashboardTabla({ registros, sucursales, estado, onEstado, mesAct
     const rec = adjuntando;
     setAdjuntando(null);
     if (!file || !rec) return;
+    const problema = errorArchivo(file);
+    if (problema) {
+      toast.error("Archivo demasiado grande", problema);
+      return;
+    }
     toast.info("Subiendo documento…", file.name);
     const fd = new FormData();
     fd.set("recordId", rec.id);

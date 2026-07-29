@@ -17,6 +17,7 @@ import { Btn, Input, Select } from "@/components/ui/controls";
 import { Card, Chip, Field, SectionHead } from "@/components/ui/layout";
 import { useToast } from "@/components/ui/toast";
 import { uploadFotoAction } from "@/app/actions/fotos";
+import { errorArchivo } from "@/lib/domain/archivos";
 import { TYPES } from "@/lib/domain/catalog";
 import { fmtDateTime } from "@/lib/domain/format";
 import { getProviderOptionsFor, getSubcatsFor } from "@/lib/domain/sucursales";
@@ -319,6 +320,14 @@ export function FotoHub({ fotos, error, sucursales, mesActual }) {
   const [subiendo, setSubiendo] = useState([]);
 
   const subir = async (params) => {
+    // Una foto de cámara puede pesar bastante; sobre el tope el Server Action
+    // corta el cuerpo y el error llega sin mensaje.
+    const problema = errorArchivo(params.file);
+    if (problema) {
+      toast.error("Foto demasiado grande", problema);
+      return;
+    }
+
     const job = { id: `${Date.now()}-${params.file.name}`, label: params.file.name };
     setTab("cola");
     setSubiendo((s) => [...s, job]);
