@@ -13,10 +13,22 @@ referencia de lectura durante la migración. No participa del build de Next.
 |------|-----|--------|
 | F0 | Andamiaje Next (build, CSS, fuentes, env) | listo |
 | F1 | Capa de datos server-side (`lib/`, `app/actions/`) | listo |
-| F2 | Rutas del App Router + shell como layout | pendiente |
-| F3 | Port de las 16 vistas | pendiente |
-| F4 | Extractores PDF/XLSX por npm (sin CDN) | pendiente |
-| F5 | Deploy en Vercel | pendiente |
+| F2 | Rutas del App Router + shell como layout | listo |
+| F3 | Port de las vistas | 14 de 16 · falta Medidores |
+| F4 | Extractores PDF/XLSX por npm (sin CDN) | listo |
+| F5 | Deploy en Vercel | pendiente (requiere login) |
+
+### Pantallas portadas
+
+Inicio · Dashboard · Matriz de carga · Impacto · Factores · Metas · Registrar
+(hub) · Registro manual · Subir documento (+ revisión) · Tomar foto (+ completar)
+· Configuración · Editar sucursal · Puesta en marcha.
+
+Pendiente: **Medidores** y **Medidores móvil** (`proto/medidores.jsx`, 1.429
+líneas + `proto/medidores-calc.jsx`). El cálculo ya está portado en
+`lib/domain/medidores-calc.js` y los Server Actions en `app/actions/medidores.js`;
+falta la interfaz (pestañas resumen/matriz/mensual/pagos, alta de medidores,
+export a Excel y la vista de terreno).
 
 ## Dónde vive qué
 
@@ -26,8 +38,16 @@ app/
 ├── globals.css         # tokens del DS + estilos del prototipo
 ├── styles/             # tokens.css · proto.css · rc-auth.css
 ├── api/health/         # diagnóstico: endpoint configurado + versión del script
+├── api/version/        # identidad del deploy, para el aviso de versión nueva
 └── actions/            # Server Actions — toda escritura pasa por acá
+components/
+├── icons.jsx           # los 60 iconos SVG
+├── ui/                 # primitivas; layout.jsx sirve en servidor, controls.jsx no
+├── charts/             # líneas, área y heatmap, SVG a mano
+├── shell/              # sidebar, chrome y aviso de deploy nuevo
+└── views/              # una pantalla por archivo
 lib/
+├── extractores/        # parsers de boleta + pdfjs/xlsx (solo servidor)
 ├── instance.js         # EMPRESA, nombres de hojas, lectura de env
 ├── apps-script.js      # transporte contra el /exec + etiquetas de caché
 ├── drive.js            # subir / mover / eliminar archivos
@@ -96,3 +116,22 @@ por eso la app no necesita login de Google. Snapshots congelados en
 Al modificar el script: subir `SCRIPT_VERSION`, guardar el snapshot en
 `appscripts/vN_fecha.gs`, anotar en `appscripts/CHANGELOG.md` y re-implementar
 como **nueva versión** de la implementación existente (la URL no cambia).
+
+## Correcciones hechas durante el port
+
+Cosas que el prototipo prometía y no cumplía, encontradas al portar. Todas están
+documentadas en el código y en el commit que las arregla.
+
+| Dónde | Qué pasaba |
+|-------|------------|
+| `proto/extractors.jsx` (Enel) | El patrón de consumo era `(\d+)`, sin punto de miles: "Electricidad Consumida ( 20.440 kWh )" caía al fallback y guardaba **440**. |
+| `proto/dashboard.jsx` | Las ediciones de la tabla solo se escribían en la planilla si el registro tenía origen `sheets`. En los demás, el cambio se veía y no se guardaba. |
+| `proto/dashboard.jsx` | "Deshacer" revertía el valor en memoria y dejaba el nuevo en la planilla. |
+| `proto/config-edit.jsx` | "Sí, actualizar todo" al renombrar una sucursal no tocaba la planilla. |
+| `proto/config-edit.jsx` | "Eliminar también operaciones" llamaba a la misma función que "mantener operaciones". |
+| `proto/factores.jsx` | El aviso "revisa tus valores personalizados" no podía aparecer: nada marcaba `pendingReview`. |
+| `proto/metas.jsx` | "Guardar metas" solo mostraba un toast. |
+| `proto/preview.jsx` | El estado de una fila no se recalculaba al completar la sucursal faltante. |
+| `apps-script.gs` | Traía hardcodeado el ID de la planilla de otra instancia. |
+| `proto/dashboard.jsx` | El botón "Crear nueva" de subcategorías no persistía nada. |
+| `proto/metas.jsx` | Usaba el icono `history`, que no existe en el set. |
