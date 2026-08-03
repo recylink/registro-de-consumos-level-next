@@ -9,4 +9,16 @@ node_modules/
 out/
 next-env.d.ts
 .vercel
-.env*.local
+
+# Secretos. El patrón es amplio a propósito: `.env*.local` no atrapaba variantes
+# como `.env.local.bak` ni `.env.produccion`, y basta un commit para filtrar la
+# private key de la service account. La plantilla se exceptúa explícitamente.
+.env*
+!.env.local.example
+
+# Credenciales de service account. Nunca van al repo (acuerdo con TI): la app las
+# lee de GOOGLE_CLIENT_EMAIL y GOOGLE_PRIVATE_KEY.
+*service*account*.json
+*service*acount*.json
+gcp-*.json
+credentials.json
