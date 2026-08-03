@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { appsScriptGet } from "@/lib/apps-script";
 import { SDK_GET } from "@/lib/google/actions";
+import { contadorLlamadas, reiniciarContador } from "@/lib/google/sheets-api";
 
 // Verificación de la migración: corre la MISMA action de lectura por los dos
 // backends, ignorando RC_SDK_ACTIONS, y compara las respuestas celda por celda.
@@ -136,12 +137,20 @@ export async function GET(request) {
     );
   }
 
+  // El diff llama a SDK_GET directo, sin pasar por la caché, así que su consumo
+  // ES el costo en frío de leer todo por el SDK. Es el número que importa contra
+  // la cuota de 60 lecturas por minuto y por usuario.
+  reiniciarContador();
+
   const resultados = [];
   for (const action of nombres) {
     for (const params of PARAMS[action] || [null]) {
       resultados.push(await correr(action, params));
     }
   }
+
+  const c = contadorLlamadas();
+  const lecturasSheets = c.valuesGet + c.batchGet + c.metadata;
 
   const distintas = resultados.filter((r) => !r.iguales);
   const sinDatos = resultados.filter((r) => r.iguales && !r.verificada);
@@ -151,6 +160,10 @@ export async function GET(request) {
       verificadas: resultados.filter((r) => r.verificada).length,
       distintas: distintas.length,
       coincidenSinDatos: sinDatos.length,
+      // Cuánto cuesta en requests leer todo por el SDK sin caché. Contra la
+      // cuota de 60/minuto, esto es el presupuesto de un render completo en frío.
+      lecturasSheetsEnFrio: lecturasSheets,
+      detalleLlamadas: c,
       veredicto:
         distintas.length > 0
           ? "hay diferencias"
