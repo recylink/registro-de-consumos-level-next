@@ -61,12 +61,29 @@ function comparar(a, b, ruta = "", difs = []) {
   return difs;
 }
 
+async function conReintento(fn, intentos = 3) {
+  let ultimo;
+  for (let i = 0; i < intentos; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      ultimo = err;
+      // Espera creciente: 300ms, 600ms.
+      await new Promise((r) => setTimeout(r, 300 * (i + 1)));
+    }
+  }
+  throw ultimo;
+}
+
 async function correr(action, params) {
   const etiqueta = params ? `${action}(${JSON.stringify(params)})` : action;
   const salida = { action: etiqueta };
 
+  // El /exec falla con "fetch failed" cada tantas llamadas seguidas — la
+  // intermitencia que ya se venía notando. Sin reintento, el diff reporta como
+  // diferencia lo que solo fue una caída de red del backend viejo.
   const [viejo, nuevo] = await Promise.allSettled([
-    appsScriptGet({ action, ...(params || {}) }),
+    conReintento(() => appsScriptGet({ action, ...(params || {}) })),
     SDK_GET[action]({ action, ...(params || {}) }),
   ]);
 
@@ -83,11 +100,24 @@ async function correr(action, params) {
     salida.diferencias = difs;
     salida.truncado = difs.length >= MAX_DIFS;
   }
-  // Tamaño, para que un "iguales: true" sobre dos respuestas vacías no pase por
-  // verificación: dos [] idénticos no prueban nada.
-  const filas = (v) => (Array.isArray(v?.rows) ? v.rows.length : null);
-  salida.filas = { appsScript: filas(viejo.value), sdk: filas(nuevo.value) };
+  // Cuántas celdas se compararon de verdad. Sin esto, "iguales: true" sobre dos
+  // respuestas vacías se lee como verificado y no lo está: la hoja "Emisiones"
+  // no existe en esta planilla, así que ambos backends devuelven [] y coincidir
+  // no demuestra que la traducción sea correcta.
+  salida.celdas = contarCeldas(viejo.value);
+  salida.verificada = salida.iguales && salida.celdas > 0;
+  if (salida.iguales && salida.celdas === 0) {
+    salida.aviso = "ambos backends devolvieron vacío: coincide, pero no prueba nada";
+  }
   return salida;
+}
+
+/** Celdas hoja en la respuesta, sin importar su forma ({rows}, objeto por hoja, escalar). */
+function contarCeldas(v) {
+  if (v == null) return 0;
+  if (Array.isArray(v)) return v.reduce((n, x) => n + contarCeldas(x), 0);
+  if (typeof v === "object") return Object.values(v).reduce((n, x) => n + contarCeldas(x), 0);
+  return v === "" ? 0 : 1;
 }
 
 export async function GET(request) {
@@ -114,12 +144,19 @@ export async function GET(request) {
   }
 
   const distintas = resultados.filter((r) => !r.iguales);
+  const sinDatos = resultados.filter((r) => r.iguales && !r.verificada);
   return NextResponse.json({
     resumen: {
       probadas: resultados.length,
-      iguales: resultados.length - distintas.length,
+      verificadas: resultados.filter((r) => r.verificada).length,
       distintas: distintas.length,
-      veredicto: distintas.length === 0 ? "todas coinciden" : "hay diferencias",
+      coincidenSinDatos: sinDatos.length,
+      veredicto:
+        distintas.length > 0
+          ? "hay diferencias"
+          : sinDatos.length > 0
+            ? "coinciden, pero " + sinDatos.length + " sin datos que comparar"
+            : "todas verificadas con datos reales",
     },
     resultados,
   });
