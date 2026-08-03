@@ -7,6 +7,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/components/icons";
+import { SalirBtn } from "@/components/shell/salir";
 
 // `match` define qué rutas dejan el ítem activo, no solo su propio href:
 // /matriz cuelga de Dashboard, /impacto/factores de Impacto, etc.
@@ -19,7 +20,7 @@ const ITEMS = [
   { href: "/configuracion", label: "Configuración", icon: "settings", match: (p) => p.startsWith("/configuracion") },
 ];
 
-export function Sidebar({ collapsed, onToggle }) {
+export function Sidebar({ collapsed, onToggle, conMuro }) {
   const pathname = usePathname() || "/";
 
   return (
@@ -57,6 +58,8 @@ export function Sidebar({ collapsed, onToggle }) {
           </Link>
         ))}
       </nav>
+
+      {conMuro && <SalirBtn collapsed={collapsed} />}
     </aside>
   );
 }
