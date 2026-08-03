@@ -18,7 +18,12 @@ citan los archivos originales como `proto/x.jsx`: hoy son `_legacy/proto/x.jsx`.
 | F2 | Rutas del App Router + shell como layout | listo |
 | F3 | Port de las vistas | listo (16 de 16) |
 | F4 | Extractores PDF/XLSX por npm (sin CDN) | listo |
-| F5 | Deploy en Vercel | pendiente (requiere login) |
+| F5 | Deploy en Vercel | listo |
+
+El repo vive en `recylink/registro-de-consumos-next` (privado) y el proyecto
+Vercel es `registro-de-consumos-next`: push a `main` despliega producción, las
+demás ramas dan preview URLs. Respaldo si la integración git falla:
+`npx vercel --prod --yes`.
 
 ### Pantallas portadas
 
