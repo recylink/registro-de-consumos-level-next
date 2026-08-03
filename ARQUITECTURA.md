@@ -95,10 +95,15 @@ lib/
 
 ## Decisiones
 
-**Nada de secretos en el cliente.** `APPS_SCRIPT_URL` se lee solo en el
-servidor; `lib/instance.js` y todo `lib/sheets/` importan `server-only`, así el
-build falla si un componente cliente los arrastra. En el prototipo la URL del
-endpoint estaba en el bundle y cualquiera podía escribir en la planilla.
+**Nada de secretos en el cliente.** `APPS_SCRIPT_URL` y la clave privada de la
+service account se leen solo en el servidor; `lib/instance.js`, `lib/google/` y
+todo `lib/sheets/` importan `server-only`, así el build falla si un componente
+cliente los arrastra. En el prototipo la URL del endpoint estaba en el bundle y
+cualquiera podía escribir en la planilla.
+
+El JSON de credenciales **no va al repo** (regla de TI): la service account viaja
+en `GOOGLE_CLIENT_EMAIL` y `GOOGLE_PRIVATE_KEY`, esta última en una línea con los
+saltos como `\n` escapados. Ver `.env.local.example`.
 
 **Server Actions, no route handlers.** Las mutaciones son funciones importables
 desde los componentes; no hay API REST intermedia que mantener sincronizada. El
@@ -145,17 +150,74 @@ proveedor no obliga a redeployar la app.
 7. Verificar: `curl -s localhost:3000/api/health` debe responder con
    `"version": "v4"`.
 
-## Backend
+## Backend: migración de Apps Script al SDK de Google APIs
 
-El Apps Script (`apps-script.gs`) sigue siendo el backend: expone un `/exec`
-público que multiplexa por `action`, corre con la cuenta dueña de la planilla y
-por eso la app no necesita login de Google. Snapshots congelados en
-`appscripts/`, versión activa en `SCRIPT_VERSION` (visible en
-`/api/health`).
+Encargo de TI (coworking del 2026-07-30): la app le habla **directo** a Sheets y
+Drive con una service account, en vez de pasar por el `/exec` del Apps Script —
+que era una aplicación web con acceso "cualquier usuario", o sea un endpoint
+público que aceptaba escrituras de quien tuviera la URL. El objetivo de fondo es
+que los archivos de Drive puedan ser privados.
 
-Al modificar el script: subir `SCRIPT_VERSION`, guardar el snapshot en
-`appscripts/vN_fecha.gs`, anotar en `appscripts/CHANGELOG.md` y re-implementar
-como **nueva versión** de la implementación existente (la URL no cambia).
+Va **de a una action**, con los dos backends conviviendo. La costura son `apiGet` y
+`apiPost` de `lib/apps-script.js`: enrutan por action según la env var
+`RC_SDK_ACTIONS`, así que migrar una no toca ninguno de los ocho consumidores de
+`lib/`, y sacarla de esa lista la revierte sin revertir código.
+
+| Bloque | Actions | Estado |
+|--------|---------|--------|
+| A | las 8 lecturas | migrado |
+| B | `append` · `update` · `updateCells` | migrado |
+| C | `setConfig` · `setConfigSucursales` · `setEmissions` · las 3 de Medidores | migrado |
+| D | `upsertSucursal` · `deleteSucursal` | migrado |
+| E | `upload` · `move` · `deleteFile` | **bloqueado**: una service account no tiene cuota propia en Drive, así que crear archivos exige Unidad compartida (Workspace) o delegación de dominio |
+| F | `notifyFotoPending` | **bloqueado**: `MailApp` no existe en el SDK |
+| G | `setup` · `init` | provisión, va al final |
+
+`lib/google/` tiene la traducción: `auth.js` (service account desde env vars),
+`sheets-api.js` (helpers de bajo nivel), `actions.js` (una entrada por action) y
+`headers.js` (los encabezados que el `.gs` tenía en `WEB_CFG.HEADERS`).
+
+### Lo que hay que saber antes de tocar esto
+
+- **Los dos modos de lectura no son intercambiables.** El script mezclaba
+  `getValues()` y `getDisplayValues()` según la hoja, y hay que respetarlo hoja por
+  hoja: unificarlos deja a los parsers leyendo seriales de fecha en vez de
+  `"31-07-26"`, sin lanzar ningún error.
+- **`setValues()` equivale a `USER_ENTERED`**, medido con
+  `/api/migracion/probe-escritura`, no supuesto.
+- **Se escribe antes de borrar**, al revés del original. El Apps Script hacía
+  `clear()` y después escribía, protegido por `LockService`; sin lock ese orden
+  deja una ventana con la hoja vacía. Y no es teórico: en `probe-c` el Apps Script
+  pierde las filas cuando la escritura falla la validación.
+- **Las lecturas por SDK van por `unstable_cache`.** No es un lujo: la cuota de la
+  API de Sheets es de 60 lecturas por minuto y por usuario, y sin caché el build
+  la revienta. Las de Apps Script se cacheaban solas por ser `fetch`.
+
+### Verificación
+
+Que la pantalla se vea bien no prueba nada acá: las diferencias son mudas (una
+fila más corta, un número sin formato, una fecha como serial). Endpoints de
+desarrollo, todos bajo `/api/migracion/`:
+
+| Endpoint | Qué prueba |
+|----------|-----------|
+| `diff` | corre cada lectura por los dos backends y compara celda por celda |
+| `probe-escritura` | qué modo de escritura imita a `setValues()` |
+| `probe-b` | efecto de las escrituras puntuales, en hojas descartables |
+| `probe-c` | reescrituras: crear, encoger, vaciar, crecer |
+| `probe-d` | filas por sucursal, con copia y restauración de la hoja real |
+| `invalidar` | limpia las etiquetas de caché, para medir en frío |
+
+### El Apps Script mientras dure
+
+Sigue sirviendo las 5 actions que faltan. Al modificarlo: subir `SCRIPT_VERSION`,
+guardar el snapshot en `appscripts/vN_fecha.gs`, anotar en
+`appscripts/CHANGELOG.md` y re-implementar como **nueva versión** de la
+implementación existente (la URL no cambia).
+
+`lib/google/headers.js` duplica `WEB_CFG.HEADERS` del `.gs`. Es a propósito
+mientras haya actions en el `/exec`: si se toca una, tocar la otra. Un desajuste
+solo se nota cuando una hoja se crea de cero.
 
 ## Correcciones hechas durante el port
 
