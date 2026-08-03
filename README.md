@@ -51,8 +51,11 @@ En Vercel, las mismas claves como variables de entorno del proyecto.
 
 ## Deploy
 
-`main` está conectado a Vercel: cada push despliega producción, y las demás ramas
-generan preview URLs.
+Por ahora manual: `npx vercel --prod --yes`.
+
+La integración git con Vercel está pendiente de autorización del admin de la org
+en GitHub. Cuando se conecte, cada push a `main` desplegará producción y las demás
+ramas generarán preview URLs. Ver [ARQUITECTURA.md](ARQUITECTURA.md#estado-de-la-migración).
 
 ## Estructura
 

@@ -21,9 +21,14 @@ citan los archivos originales como `proto/x.jsx`: hoy son `_legacy/proto/x.jsx`.
 | F5 | Deploy en Vercel | listo |
 
 El repo vive en `recylink/registro-de-consumos-next` (privado) y el proyecto
-Vercel es `registro-de-consumos-next`: push a `main` despliega producción, las
-demás ramas dan preview URLs. Respaldo si la integración git falla:
-`npx vercel --prod --yes`.
+Vercel es `registro-de-consumos-next`.
+
+La integración git está **pendiente**: espera que un admin de la org autorice la
+Vercel app en GitHub. Hasta entonces el deploy es manual —
+`npx vercel --prod --yes` — y un push a `main` no despliega nada. Al autorizarse,
+conectar desde Settings → Git del proyecto existente (no importar el repo de
+cero, que crearía un segundo proyecto sin las env vars); desde ahí `main` es
+producción y las demás ramas dan preview URLs.
 
 ### Pantallas portadas
 
