@@ -3,6 +3,7 @@ import { ping } from "@/lib/apps-script";
 import { instanceInfo } from "@/lib/data";
 import { isSdkConfigured, sdkFaltantes, sdkPing } from "@/lib/google/auth";
 import { estadoFlag } from "@/lib/backend-flag";
+import { appsScriptConfigurado } from "@/lib/instance";
 
 // Diagnóstico de la instancia. Durante la migración de Apps Script al SDK de
 // Google APIs conviven dos backends, así que reporta los dos por separado: cuál
@@ -25,7 +26,9 @@ async function probar(fn) {
 export async function GET() {
   const info = instanceInfo();
 
-  const appsScript = info.configured
+  // `info.configured` ahora significa "hay algún backend", así que no sirve para
+  // decidir si sondear el viejo: con solo el SDK daría true y el sondeo fallaría.
+  const appsScript = appsScriptConfigurado()
     ? await probar(ping)
     : { ok: false, error: "APPS_SCRIPT_URL no configurada" };
 

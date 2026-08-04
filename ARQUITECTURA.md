@@ -114,9 +114,18 @@ desde los componentes; no hay API REST intermedia que mantener sincronizada. El
 `revalidateTag`. Reemplaza al `rcRefreshDashboard()` global del prototipo, que
 recargaba todo ante cualquier cambio.
 
-**Modo local.** Sin `APPS_SCRIPT_URL`, los loaders de `lib/data.js` devuelven
-datos vacíos y las escrituras fallan con un mensaje claro. Permite desarrollar
-sin tocar ninguna planilla real.
+**Modo local.** Sin NINGÚN backend configurado, los loaders de `lib/data.js`
+devuelven datos vacíos y las escrituras fallan con un mensaje claro. Permite
+desarrollar sin tocar ninguna planilla real.
+
+"Ningún backend" son dos preguntas distintas desde que existe el SDK, y confundirlas
+fue un bug real: `isConfigured()` miraba solo `APPS_SCRIPT_URL` y se usaba como si
+significara "hay con qué leer". Con la service account puesta y sin la URL del
+`/exec` —20 de 24 actions funcionando— todas las pantallas salían vacías. Hoy son
+dos funciones en `lib/instance.js`:
+
+- `appsScriptConfigurado()` — la usa el transporte del `/exec` para fallar claro.
+- `hayBackend()` — Apps Script **o** SDK. La usan `lib/data.js` y el aviso de la UI.
 
 **Errores que se leen.** Los Server Actions devuelven `{ ok, error }` en vez de
 lanzar: una excepción cruzando el límite servidor→cliente llega al navegador sin
@@ -169,13 +178,43 @@ Va **de a una action**, con los dos backends conviviendo. La costura son `apiGet
 | B | `append` · `update` · `updateCells` | migrado |
 | C | `setConfig` · `setConfigSucursales` · `setEmissions` · las 3 de Medidores | migrado |
 | D | `upsertSucursal` · `deleteSucursal` | migrado |
-| E | `upload` · `move` · `deleteFile` | **bloqueado**: una service account no tiene cuota propia en Drive, así que crear archivos exige Unidad compartida (Workspace) o delegación de dominio |
-| F | `notifyFotoPending` | **bloqueado**: `MailApp` no existe en el SDK |
-| G | `setup` · `init` | provisión, va al final |
+| E | `upload` · `move` · `deleteFile` | **bloqueado**: la API de Drive no está habilitada en el proyecto de Google Cloud (ver abajo) |
+| F | `notifyFotoPending` | **se queda en Apps Script**, por decisión — `MailApp` no existe en el SDK |
+| G | `init` migrada · `setup` bloqueado con E | `setup` crea el árbol de carpetas de Drive |
 
 `lib/google/` tiene la traducción: `auth.js` (service account desde env vars),
 `sheets-api.js` (helpers de bajo nivel), `actions.js` (una entrada por action) y
 `headers.js` (los encabezados que el `.gs` tenía en `WEB_CFG.HEADERS`).
+
+### Lo que falta, y por qué
+
+**Drive (`upload`, `move`, `deleteFile`, y la mitad de `setup`).** El primer
+diagnóstico fue equivocado: se dio por sentado que el bloqueo era la falta de cuota
+de almacenamiento de una service account. Medido con `/api/diagnostico/drive`, el
+error real es que la **API de Drive no está habilitada** en el proyecto de Google
+Cloud `recylink` (551899594359) — la de Sheets sí lo está. Hasta habilitarla no se
+sabe si la cuota es además un problema. Y si lo fuera, solo afectaría a *crear*:
+`move` y `deleteFile` operan sobre archivos existentes.
+
+**Mail (`notifyFotoPending`).** Se queda en el Apps Script a propósito.
+`MailApp` no tiene equivalente en el SDK, y las alternativas (API de Gmail con
+delegación de dominio, o un proveedor tipo Resend) cuestan más que el beneficio
+para una sola notificación. Consecuencia: `APPS_SCRIPT_URL` sigue siendo
+**requerida**, y el `/exec` no se puede dar de baja.
+
+### El `/exec` sigue abierto, y migrar no lo cierra
+
+El objetivo del encargo era dejar de depender de un endpoint público que acepta
+escrituras. Migrar las actions del lado de la app **no lo logra por sí solo**: el
+script sigue implementando las 24, así que quien tenga la URL puede seguir
+mandando `append`, `setMedidores` o `deleteSucursal`. Las pruebas de paridad de
+esta migración son la demostración — escriben en la planilla por ahí.
+
+Para cerrarlo hay que **recortar `apps-script.gs`** y dejar solo lo que la app
+todavía necesita. Conviene hacerlo de una vez, cuando se resuelva Drive: hoy
+sobrevivirían `upload`, `move`, `deleteFile`, `setup` y `notifyFotoPending`;
+después, solo la última. Recortar es editar el `.gs`, subir `SCRIPT_VERSION` y
+re-implementar — la URL no cambia.
 
 ### Lo que hay que saber antes de tocar esto
 
