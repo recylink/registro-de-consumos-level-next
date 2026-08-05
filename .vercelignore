@@ -14,3 +14,6 @@ appscripts/
 # Documentación del repo.
 ARQUITECTURA.md
 CONTEXT.md
+
+# Pruebas: corren con `npm test`, no participan del build.
+test/

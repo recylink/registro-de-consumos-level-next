@@ -47,10 +47,24 @@ y por eso la que más se aparta del resto:
 
 - **El estado editable vive en el cliente.** `components/medidores/estado.jsx`
   siembra el módulo con lo que leyó el servidor y desde ahí manda el navegador,
-  con guardado automático a los 900ms (el Apps Script reescribe las tres hojas por
-  escritura y serializa con un lock, así que no se puede guardar por tecla). Los
-  guardados se encolan y un fallo se avisa por toast; en el prototipo un error de
-  guardado era solo un `console.error`.
+  con guardado automático a los 900ms. Los guardados se encolan y un fallo se avisa
+  por toast; en el prototipo un error de guardado era solo un `console.error`.
+- **Se guarda un patch, no el módulo.** Lo que viaja al servidor es la diferencia
+  entre el último estado confirmado y el actual, y el servidor escribe fila por
+  fila buscándolas por su clave natural (`lib/domain/medidores-patch.js`,
+  `upsertPorClave` en `lib/google/actions.js`).
+
+  Antes se mandaba el módulo completo y se reescribían las tres hojas enteras. Eso
+  hacía que la planilla quedara igual a la copia del último que guardó: dos
+  dispositivos editando a la vez se borraban el trabajo, y el debounce lo empeoraba
+  porque la copia que se manda puede tener minutos de atraso. El `LockService` del
+  Apps Script serializaba las escrituras pero no detectaba lecturas obsoletas, y el
+  SDK no tiene ni siquiera el lock.
+
+  Diffear del lado del servidor no habría alcanzado: si el cliente manda la tabla
+  entera, "esta fila no viene" es ambiguo entre "la borré" y "nunca la vi". Por eso
+  el diff se calcula contra el estado confirmado del propio cliente, donde la
+  ausencia sí significa borrado.
 - **La selección no es parte del documento.** Sucursal, tipo, pestaña y período
   son estado de la pantalla. En el prototipo vivían en el mismo objeto que se
   sincronizaba con la planilla.
@@ -176,11 +190,56 @@ Va **de a una action**, con los dos backends conviviendo. La costura son `apiGet
 |--------|---------|--------|
 | A | las 8 lecturas | migrado |
 | B | `append` · `update` · `updateCells` | migrado |
-| C | `setConfig` · `setConfigSucursales` · `setEmissions` · las 3 de Medidores | migrado |
+| C | `setConfig` | migrado |
+| C' | las 3 de Medidores (`setSheetRows`) · `setEmissions` · `setConfigSucursales` | **reemplazadas**, no traducidas — ver abajo |
 | D | `upsertSucursal` · `deleteSucursal` | migrado |
 | E | `upload` · `move` · `deleteFile` | **bloqueado**: la API de Drive no está habilitada en el proyecto de Google Cloud (ver abajo) |
 | F | `notifyFotoPending` | **se queda en Apps Script**, por decisión — `MailApp` no existe en el SDK |
 | G | `init` migrada · `setup` bloqueado con E | `setup` crea el árbol de carpetas de Drive |
+
+**La excepción a la fidelidad.** Todo lo demás replica su action del `.gs` firma
+por firma, para que la migración fuera comparable contra el backend viejo. Los
+`clear()` + reescribir la hoja completa no: eran la causa concreta de pérdida de
+datos, y traducirlos con fidelidad habría portado el bug a un backend que además
+perdió el `LockService`. En su lugar hay cuatro actions nuevas que escriben por
+clave:
+
+| Reemplaza | Nueva action | Alcance de una escritura |
+|-----------|--------------|--------------------------|
+| `setSheetRows` × 3 (Medidores) | `upsertMedidores` · `upsertLecturasMedidor` · `upsertPreciosMedidor` | las filas del patch |
+| `setEmissions` | `upsertEmisiones` | las filas del patch; los refrigerantes, por sucursal |
+| `setConfigSucursales` | `upsertSucursal`, una vez por sucursal | las filas de una sucursal |
+
+Los tres nombres de Medidores **no** están implementados en el SDK a propósito: si
+aparecieran en `RC_SDK_ACTIONS`, el router caería al `/exec`, donde `setSheetRows`
+sigue vivo y volvería a hacer el clobber. `setEmissions` sí sigue implementada, pero
+solo porque `/api/migracion/probe-c` la usa para comparar los dos backends sobre una
+hoja que crea y borra; nada de la app la llama.
+
+Por eso las actions sin equivalente en el `.gs` salen por `apiPostSoloSdk`, que falla
+con un mensaje que nombra el env var en vez de degradar al backend viejo.
+
+**`reemplazarHoja` queda como excepción, no como regla.** Sirve donde la hoja tiene
+un solo escritor y se reescribe entera por diseño: `setConfigSucursales`, que hoy solo
+usa el onboarding. No sirve para nada que se edite celda por celda desde la UI.
+
+**Identidad de las filas.** Las tres hojas de consumo tienen una columna `ID` al
+final, y `updateCeldasPorClave` es el `UPDATE ... WHERE` que la API de valores no
+tiene: busca la fila por su ID y escribe solo las celdas pedidas. Antes la identidad
+de un registro era su posición (`comb-12` = la fila 14), que queda inválida en cuanto
+alguien ordena la planilla — y escribir en la fila equivocada no da ningún error.
+La columna la agrega `/api/migracion/columna-id` (informe por GET, aplicar por POST
+con `?aplicar=si`), que deja `registrosConId: true` en la hoja "Config"; ese flag es
+lo que enciende la escritura de ids en los `append`. Mientras no exista, la app
+vuelve al id posicional y se comporta como antes.
+
+**Encabezados.** `lib/sheets/encabezados.js` compara el encabezado real contra el
+esperado antes de leer nada por posición. Una columna **movida o borrada** corta la
+lectura con un mensaje que dice cuál y dónde; una **renombrada** —o escrita sin
+tilde, que es el caso real— solo deja un aviso en el log, porque los datos se siguen
+leyendo bien. Resolver las columnas por nombre habría sido lo obvio y es peor: el
+encabezado lo editan personas, así que renombrar una columna pasaría de inofensivo a
+romper la lectura.
 
 `lib/google/` tiene la traducción: `auth.js` (service account desde env vars),
 `sheets-api.js` (helpers de bajo nivel), `actions.js` (una entrada por action) y
@@ -202,19 +261,39 @@ delegación de dominio, o un proveedor tipo Resend) cuestan más que el benefici
 para una sola notificación. Consecuencia: `APPS_SCRIPT_URL` sigue siendo
 **requerida**, y el `/exec` no se puede dar de baja.
 
-### El `/exec` sigue abierto, y migrar no lo cierra
+### El `/exec`: migrar no lo cierra, recortarlo sí
 
-El objetivo del encargo era dejar de depender de un endpoint público que acepta
-escrituras. Migrar las actions del lado de la app **no lo logra por sí solo**: el
-script sigue implementando las 24, así que quien tenga la URL puede seguir
-mandando `append`, `setMedidores` o `deleteSucursal`. Las pruebas de paridad de
-esta migración son la demostración — escriben en la planilla por ahí.
+Migrar las actions del lado de la app **no reduce la exposición**. El endpoint es
+público y sin autenticación —"ejecutar como: yo" + "cualquier usuario"—, así que
+mientras el script implemente una action, cualquiera con la URL la ejecuta. Y la URL
+viajó en el JS de un frontend público: hay que tratarla como conocida.
 
-Para cerrarlo hay que **recortar `apps-script.gs`** y dejar solo lo que la app
-todavía necesita. Conviene hacerlo de una vez, cuando se resuelva Drive: hoy
-sobrevivirían `upload`, `move`, `deleteFile`, `setup` y `notifyFotoPending`;
-después, solo la última. Recortar es editar el `.gs`, subir `SCRIPT_VERSION` y
-re-implementar — la URL no cambia.
+Eso valía para el clobber de Medidores: la app ya no puede reescribir esas hojas, pero
+`setSheetRows` seguía ahí y no le pedía credenciales a nadie. El arreglo del lado de la
+app quita el modo de falla accidental —dos usuarios legítimos pisándose—, no el
+deliberado.
+
+**Y el cierre no estaba bloqueado por Drive, como se creyó un tiempo.** Solo cuatro
+actions dependen de Workspace. Las otras 20 se podían retirar de inmediato. `v5` hace
+eso: el script pasa de 26 actions a 6.
+
+| Sigue | Por qué |
+|-------|---------|
+| `upload` · `move` · `deleteFile` | la API de Drive no está habilitada en el proyecto de Cloud |
+| `notifyFotoPending` | `MailApp` no existe en el SDK |
+| `setup` | crea el árbol de carpetas de Drive; depende de lo mismo |
+| `ping` | versión desplegada, para `/api/health` |
+
+Ninguna de las seis puede tocar los datos de consumo. Además `doGet` sin `action` ya no
+hace `read` por defecto — un GET pelado a la URL devolvía la planilla completa.
+
+Lo que **no** se hizo: borrar las funciones de Sheets del archivo. `setup` depende de
+varias y el grafo de dependencias no se puede verificar sin correr el script. Ya no son
+alcanzables por HTTP, que es lo que importa; borrarlas es limpieza posterior, desde el
+editor donde se puede ejecutar.
+
+Recortar es editar el `.gs`, subir `SCRIPT_VERSION` y re-implementar como nueva versión
+de la implementación existente — la URL no cambia.
 
 ### Lo que hay que saber antes de tocar esto
 
@@ -246,6 +325,21 @@ desarrollo, todos bajo `/api/migracion/`:
 | `probe-c` | reescrituras: crear, encoger, vaciar, crecer |
 | `probe-d` | filas por sucursal, con copia y restauración de la hoja real |
 | `invalidar` | limpia las etiquetas de caché, para medir en frío |
+| `columna-id` | GET: informe de qué filas les falta el ID. POST `?aplicar=si`: lo agrega |
+| `lectura-cruda` | GET: qué celdas se leerían distinto al pasar a `UNFORMATTED_VALUE` |
+
+**`diff`, `probe-b`, `probe-c` y `probe-d` dejan de funcionar con el script `v5`.**
+Escriben y leen por el `/exec` para comparar los dos backends, y esas actions se
+retiraron. Su trabajo ya está hecho: dejaron el registro de paridad que justificó cada
+action migrada. Se conservan como documentación de cómo se verificó, no como algo que
+se pueda volver a correr. Correrlos exige volver a un script anterior, y eso significa
+reabrir el endpoint.
+
+Los dos últimos no son pruebas sino herramientas de migración. `columna-id` es el
+único que escribe en la planilla real, y solo con `?aplicar=si`: es idempotente
+(nunca cambia un id ya asignado), verifica después de escribir, y no enciende su flag
+si alguna hoja no verificó. Aun así, duplicar la planilla antes es la única vuelta
+atrás real. `lectura-cruda` no escribe nada.
 
 ### El Apps Script mientras dure
 
