@@ -18,8 +18,7 @@ import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { Btn, Select } from "@/components/ui/controls";
 import { Card, Chip, SectionHead } from "@/components/ui/layout";
-import { useAccion } from "@/components/use-accion";
-import { saveEmissionsAction } from "@/app/actions/config";
+import { useGuardarEmisiones } from "@/components/views/guardar-emisiones";
 import { fmtTon } from "@/lib/domain/format";
 import { EMISSION_FACTOR_CATALOG, REFRIGERANTES_CATALOG, SCOPES } from "@/lib/domain/emisiones";
 import { CAT_META, esFactorPropio, factorFor, overridesPendientes } from "@/lib/domain/emisiones-calc";
@@ -221,7 +220,7 @@ const POR_ALCANCE = { 1: [], 2: [], 3: [] };
 for (const [k, def] of Object.entries(EMISSION_FACTOR_CATALOG)) POR_ALCANCE[def.scope].push(k);
 
 export function Factores({ emissions: inicial, sucursales, mesActual }) {
-  const { correr, pending } = useAccion();
+  const { guardarEmisiones, pending } = useGuardarEmisiones(inicial);
   const [emissions, setEmissions] = useState(inicial);
   const [ambito, setAmbito] = useState("all"); // "all" = empresa
 
@@ -230,7 +229,7 @@ export function Factores({ emissions: inicial, sucursales, mesActual }) {
 
   const guardar = (siguiente, exito) => {
     setEmissions(siguiente);
-    correr(() => saveEmissionsAction(siguiente), { exito });
+    guardarEmisiones(siguiente, { exito });
   };
 
   const setFactorEmpresa = (key, value) => {

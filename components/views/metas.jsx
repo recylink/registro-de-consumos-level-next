@@ -16,8 +16,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Btn, Select } from "@/components/ui/controls";
 import { Card, Chip, Field, SectionHead } from "@/components/ui/layout";
-import { useAccion } from "@/components/use-accion";
-import { saveEmissionsAction } from "@/app/actions/config";
+import { useGuardarEmisiones } from "@/components/views/guardar-emisiones";
 import { fmtTon } from "@/lib/domain/format";
 import { agregadoEmisiones, emisionesDelAnio, emisionesPorSucursal } from "@/lib/domain/emisiones-calc";
 
@@ -191,7 +190,7 @@ function MetaEditor({ meta, onPatch, anualActual, baseAutomatica, aniosBase }) {
 
 export function Metas({ emissions: inicial, records, sucursales, mesActual, anioActual }) {
   const router = useRouter();
-  const { correr, pending } = useAccion();
+  const { guardarEmisiones, pending } = useGuardarEmisiones(inicial);
   const [emissions, setEmissions] = useState(inicial);
   const [sucios, setSucios] = useState(false);
 
@@ -231,7 +230,7 @@ export function Metas({ emissions: inicial, records, sucursales, mesActual, anio
     const siguiente = { ...emissions, metas: { ...emissions.metas, sucursales: resto } };
     setEmissions(siguiente);
     setSucios(false);
-    correr(() => saveEmissionsAction(siguiente), {
+    guardarEmisiones(siguiente, {
       exito: {
         title: "Meta restablecida",
         body: `${suc.nombre} vuelve a heredar la meta de empresa.`,
@@ -241,7 +240,7 @@ export function Metas({ emissions: inicial, records, sucursales, mesActual, anio
 
   const guardar = () => {
     setSucios(false);
-    correr(() => saveEmissionsAction(emissions), {
+    guardarEmisiones(emissions, {
       exito: {
         title: "Metas guardadas",
         body: "Los objetivos de reducción se aplicaron al dashboard de impacto.",

@@ -3,10 +3,15 @@
 // Estado del módulo Medidores en el cliente + guardado automático.
 //
 // Es la única vista con edición celda por celda: una lectura por medidor y mes,
-// más precios y documentos. Guardar en cada tecla no sirve (el Apps Script
-// reescribe las tres hojas por escritura y serializa con un lock de 30s), así
-// que se replica lo del prototipo: el módulo completo vive en memoria y se
-// escribe con 900ms de debounce.
+// más precios y documentos. Guardar en cada tecla no sirve, así que el módulo
+// completo vive en memoria y se escribe con 900ms de debounce.
+//
+// Lo que se MANDA, en cambio, no es el módulo completo: es el patch de lo que
+// cambió desde el último guardado confirmado. La distinción no es una optimización.
+// Mandar la tabla entera significaba que la planilla quedaba igual a la copia de
+// este cliente, borrando lo que hubiera escrito otro dispositivo mientras tanto —
+// y el debounce lo empeoraba, porque la copia que se manda puede tener minutos de
+// atraso. Ver lib/domain/medidores-patch.js para el razonamiento completo.
 //
 // Diferencias con el prototipo:
 //   - el resultado del guardado se avisa (allá un fallo era un console.error y
@@ -28,9 +33,10 @@
 // la escritura, y los fallos se reintentan solos con espera creciente.
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { saveMedidoresAction } from "@/app/actions/medidores";
+import { saveMedidoresPatchAction } from "@/app/actions/medidores";
 import { useToast } from "@/components/ui/toast";
 import * as med from "@/lib/domain/medidores";
+import { diffMedidores, patchVacio } from "@/lib/domain/medidores-patch";
 
 const DEBOUNCE_MS = 900;
 
@@ -56,37 +62,63 @@ export function MedidoresProvider({ inicial, children }) {
   const reintento = useRef(null);
   const intentos = useRef(0);
   const cola = useRef(Promise.resolve());
-  // Lo último que se sabe escrito en la planilla. Arranca en el estado que vino
-  // del servidor, así abrir la pantalla no dispara una escritura.
-  const escrito = useRef(JSON.stringify(slice(inicial)));
-  const porEscribir = useRef(null);
+
+  // Lo último que se sabe escrito en la planilla, como módulo. Es el "antes" del
+  // diff, y por eso solo avanza cuando el servidor confirma. Arranca en el estado
+  // que vino del servidor, así abrir la pantalla no dispara ninguna escritura.
+  //
+  // Guarda la referencia sin copiar: las transformaciones de lib/domain/medidores
+  // son inmutables (devuelven arreglos nuevos), así que lo apuntado acá no cambia
+  // por debajo.
+  const confirmado = useRef(slice(inicial));
+
+  // El último M, para poder diffear desde callbacks que no dependen de él.
+  const mRef = useRef(M);
+  mRef.current = M;
+
   // El toast de fallo se muestra una vez por racha de errores, no en cada
   // reintento: si no, escribir con la planilla caída llena la pantalla de avisos.
   const avisado = useRef(false);
 
+  /** Lo que este cliente cambió y todavía no está confirmado en la planilla. */
+  const patchPendiente = useCallback(
+    () => diffMedidores(confirmado.current, slice(mRef.current)),
+    [],
+  );
+  const hayPendiente = useCallback(
+    () => !patchVacio(patchPendiente()),
+    [patchPendiente],
+  );
+
   const escribir = useCallback(() => {
-    const datos = porEscribir.current;
-    if (!datos) return cola.current;
-    porEscribir.current = null;
-    const json = JSON.stringify(datos);
+    if (!hayPendiente()) return cola.current;
 
     cola.current = cola.current.then(async () => {
+      // El patch se recalcula ACÁ, no al encolar: mientras esperaba turno pueden
+      // haber entrado más ediciones, y mandar el patch viejo las dejaría afuera
+      // hasta el guardado siguiente.
+      const desde = confirmado.current;
+      const hasta = slice(mRef.current);
+      const patch = diffMedidores(desde, hasta);
+      if (patchVacio(patch)) return;
+
       setEstado((e) => ({ ...e, fase: "guardando", error: null }));
-      const res = await saveMedidoresAction(datos);
+      const res = await saveMedidoresPatchAction(patch);
 
       if (res?.ok) {
-        escrito.current = json;
+        // Avanza al snapshot del que salió el patch, no al M actual: lo que se
+        // editó mientras el request estaba en vuelo sigue contando como pendiente.
+        confirmado.current = hasta;
         intentos.current = 0;
         avisado.current = false;
-        // Si mientras se escribía llegaron cambios nuevos, la fase la fija el
-        // efecto que los detecta; acá solo se confirma lo que sí quedó guardado.
-        setEstado({ fase: porEscribir.current ? "pendiente" : "guardado", ts: Date.now(), error: null });
+        setEstado({ fase: hayPendiente() ? "pendiente" : "guardado", ts: Date.now(), error: null });
         return;
       }
 
-      // Se deja pendiente y se reintenta solo: el dato ya digitado no se pierde
-      // por un error de red.
-      if (!porEscribir.current) porEscribir.current = datos;
+      // No hace falta guardar el patch para reintentarlo: `confirmado` no avanzó,
+      // así que el próximo diff lo vuelve a producir, ya con las ediciones nuevas
+      // incluidas. Y como el servidor escribe por clave, reintentar es idempotente
+      // — repetir un upsert deja la fila igual, no la duplica.
       const error = res?.error || "Error inesperado";
       setEstado((e) => ({ ...e, fase: "error", error }));
 
@@ -102,17 +134,15 @@ export function MedidoresProvider({ inicial, children }) {
       }
     });
     return cola.current;
-  }, [toast]);
+  }, [toast, hayPendiente]);
 
   useEffect(() => {
-    const datos = slice(M);
-    if (JSON.stringify(datos) === escrito.current) return;
-    porEscribir.current = datos;
+    if (!hayPendiente()) return;
     setEstado((e) => (e.fase === "guardando" ? e : { ...e, fase: "pendiente" }));
     clearTimeout(timer.current);
     timer.current = setTimeout(escribir, DEBOUNCE_MS);
     return () => clearTimeout(timer.current);
-  }, [M, escribir]);
+  }, [M, escribir, hayPendiente]);
 
   /** Escribe ya lo pendiente y espera. Para antes de leer los datos del servidor. */
   const flush = useCallback(() => {
@@ -126,14 +156,16 @@ export function MedidoresProvider({ inicial, children }) {
   // debounce: al desmontar se dispara la escritura pendiente. La navegación del
   // router no corta el request en vuelo, así que alcanza a completarse.
   //
-  // El ref existe para que este efecto tenga dependencias vacías: si dependiera
+  // Los refs existen para que este efecto tenga dependencias vacías: si dependiera
   // de `escribir`, cualquier cambio de identidad de esa función correría el
   // cleanup y escribiría antes de tiempo.
   const escribirRef = useRef(escribir);
   escribirRef.current = escribir;
+  const hayPendienteRef = useRef(hayPendiente);
+  hayPendienteRef.current = hayPendiente;
   useEffect(() => {
     return () => {
-      if (porEscribir.current) escribirRef.current();
+      if (hayPendienteRef.current()) escribirRef.current();
     };
   }, []);
 
@@ -141,13 +173,13 @@ export function MedidoresProvider({ inicial, children }) {
   // algo pendiente, el navegador pregunta antes de salir.
   useEffect(() => {
     const alSalir = (e) => {
-      if (!porEscribir.current) return;
+      if (!hayPendiente()) return;
       escribir();
       e.preventDefault();
       e.returnValue = "";
     };
     const alOcultar = () => {
-      if (porEscribir.current) escribir();
+      if (hayPendiente()) escribir();
     };
     window.addEventListener("beforeunload", alSalir);
     document.addEventListener("visibilitychange", alOcultar);
@@ -155,7 +187,7 @@ export function MedidoresProvider({ inicial, children }) {
       window.removeEventListener("beforeunload", alSalir);
       document.removeEventListener("visibilitychange", alOcultar);
     };
-  }, [escribir]);
+  }, [escribir, hayPendiente]);
 
   // Cada acción es el transform puro de lib/domain/medidores aplicado al estado.
   const api = {

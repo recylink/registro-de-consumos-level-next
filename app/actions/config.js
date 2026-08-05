@@ -4,7 +4,8 @@ import { revalidateTag } from "next/cache";
 import { TAGS } from "@/lib/apps-script";
 import { run } from "@/lib/result";
 import { deleteSucursal, upsertSucursal, writeSucursales } from "@/lib/sheets/sucursales";
-import { writeEmissions } from "@/lib/sheets/emissions";
+import { upsertEmissions } from "@/lib/sheets/emissions";
+import { patchEmisionesVacio, resumenPatchEmisiones } from "@/lib/domain/emisiones-patch";
 import { writeFotoNotifEmails } from "@/lib/sheets/config-store";
 import { renameSucursalInRecords } from "@/lib/sheets/records";
 
@@ -70,12 +71,36 @@ export async function replaceSucursalesAction(sucursales) {
   });
 }
 
-/** Factores de emisión, overrides por sucursal, refrigerantes y metas. */
-export async function saveEmissionsAction(emissions) {
+// Techo de borrados por guardado, por lo mismo que en saveMedidoresPatchAction: un
+// patch que pide borrar más filas que esto es casi seguro un cliente que perdió su
+// estado de referencia. El número es holgado — la hoja completa de una instalación
+// típica ronda las 100 filas.
+const MAX_BORRADOS_EMISIONES = 150;
+
+/**
+ * Factores de emisión, overrides por sucursal, refrigerantes y metas.
+ *
+ * Recibe un patch, no el objeto completo. Antes recibía todo y reescribía la hoja
+ * "Emisiones" entera, así que dos personas editando factores o metas se borraban el
+ * trabajo sin aviso. Ver lib/domain/emisiones-patch.js.
+ */
+export async function saveEmissionsPatchAction(patch) {
   return run(async () => {
-    await writeEmissions(emissions);
+    if (patchEmisionesVacio(patch)) return { resumen: null };
+
+    const resumen = resumenPatchEmisiones(patch);
+    if (resumen.borradas > MAX_BORRADOS_EMISIONES) {
+      throw new Error(
+        `El guardado pedía borrar ${resumen.borradas} filas (máximo ` +
+          `${MAX_BORRADOS_EMISIONES}). No se escribió nada. Recargá la pantalla ` +
+          `para volver a partir de lo que tiene la planilla.`,
+      );
+    }
+
+    const escrito = await upsertEmissions(patch);
+    console.warn("[rc:emisiones] patch aplicado", JSON.stringify(escrito));
     revalidateTag(TAGS.emissions);
-    return {};
+    return { resumen, escrito };
   });
 }
 
