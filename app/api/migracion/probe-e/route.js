@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { appsScriptPost } from "@/lib/apps-script";
 import { SDK_POST } from "@/lib/google/actions";
 import { getDriveFolders } from "@/lib/drive-folders";
-import { estadoArchivo, padresDe } from "@/lib/google/drive-api";
+import {
+  buscarSubcarpetas,
+  estadoArchivo,
+  mandarAPapelera,
+  padresDe,
+} from "@/lib/google/drive-api";
+import { driveApi } from "@/lib/google/auth";
 import { trashInDrive, uploadToDrive } from "@/lib/drive";
 
 // Verifica el bloque E: las actions de Drive, comparando el EFECTO sobre Drive y no
@@ -31,6 +37,32 @@ import { trashInDrive, uploadToDrive } from "@/lib/drive";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * El /exec falla cada tantas llamadas seguidas —acá aparece como "Apps Script HTTP
+ * 404"—, y esta prueba le pega muchas veces en pocos segundos. Sin reintento, la
+ * intermitencia del backend viejo se reporta como una diferencia entre backends.
+ * Mismo criterio que /api/migracion/diff.
+ */
+async function conReintento(fn, intentos = 3) {
+  let ultimo;
+  for (let i = 0; i < intentos; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      ultimo = err;
+      await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+    }
+  }
+  throw ultimo;
+}
+
+/** Sube el archivo de prueba. Hoy sale por el /exec, así que lleva reintento. */
+function subirDePrueba(nombre, carpeta, contenido = "probe-e") {
+  return conReintento(() =>
+    uploadToDrive(new File([contenido], nombre, { type: "text/plain" }), carpeta),
+  );
+}
+
 async function pasos(fileId, A, B) {
   const out = [];
   // Un paso que falla no corta la prueba: el fallo ES el dato. Desde que las
@@ -49,7 +81,9 @@ async function pasos(fileId, A, B) {
 
   await correr("inicial", () => {});
   await correr("appsScript A→B", () =>
-    appsScriptPost({ action: "move", fileId, fromFolderId: A, toFolderId: B }),
+    conReintento(() =>
+      appsScriptPost({ action: "move", fileId, fromFolderId: A, toFolderId: B }),
+    ),
   );
   await correr("sdk A→B", () => SDK_POST.move({ fileId, fromFolderId: A, toFolderId: B }));
   await correr("sdk B→A", () => SDK_POST.move({ fileId, fromFolderId: B, toFolderId: A }));
@@ -71,16 +105,13 @@ async function pasos(fileId, A, B) {
  */
 async function probarBorrado(carpeta) {
   const casos = [
-    ["appsScript", (fileId) => appsScriptPost({ action: "deleteFile", fileId })],
+    ["appsScript", (fileId) => conReintento(() => appsScriptPost({ action: "deleteFile", fileId }))],
     ["sdk", (fileId) => SDK_POST.deleteFile({ fileId })],
   ];
   const out = {};
   for (const [nombre, borrar] of casos) {
     try {
-      const file = new File(["probe-e"], `ZZ probe-e ${nombre} (borrar).txt`, {
-        type: "text/plain",
-      });
-      const up = await uploadToDrive(file, carpeta);
+      const up = await subirDePrueba(`ZZ probe-e ${nombre} (borrar).txt`, carpeta);
       const antes = await estadoArchivo(up.id);
       await borrar(up.id);
       const despues = await estadoArchivo(up.id);
@@ -97,6 +128,96 @@ async function probarBorrado(carpeta) {
   }
   out.mismoEfecto = out.appsScript?.despues === out.sdk?.despues;
   return out;
+}
+
+/**
+ * `upload` por los dos backends, con la misma entrada.
+ *
+ * Lo que se compara no es la respuesta sino el archivo que queda: nombre, tipo,
+ * tamaño, contenido y en qué carpeta cayó. El contenido importa porque el camino del
+ * base64 cambió —`Utilities.base64Decode` + `newBlob` contra `Buffer.from` + un
+ * stream— y un binario mal decodificado se sube igual, sin ningún error: la factura
+ * queda corrupta y nadie se entera hasta que alguien la abre.
+ *
+ * Se usa un contenido con bytes que no son ASCII a propósito, que es donde una
+ * decodificación mal hecha se rompe. `Ñ`, un emoji y un byte 0x00.
+ */
+const CONTENIDO = new Uint8Array([0xc3, 0xb1, 0x00, 0xf0, 0x9f, 0x94, 0x8c, 0x41, 0xff]);
+
+async function probarSubida(carpeta, sub) {
+  const casos = [
+    ["appsScript", (body) => conReintento(() => appsScriptPost({ action: "upload", ...body }))],
+    ["sdk", (body) => SDK_POST.upload(body)],
+  ];
+  const out = {};
+  for (const [nombre, subir] of casos) {
+    try {
+      const res = await subir({
+        name: `ZZ probe-e ${nombre}.bin`,
+        mimeType: "application/octet-stream",
+        base64: Buffer.from(CONTENIDO).toString("base64"),
+        folderId: carpeta,
+        subfolders: sub,
+      });
+      const detalle = await detalleArchivo(res.id);
+      out[nombre] = {
+        id: res.id,
+        // El link es lo que la app guarda en la planilla. `getUrl()` de DriveApp y
+        // `webViewLink` del SDK no son el mismo string, así que se mira la forma.
+        link: res.link,
+        ...detalle,
+      };
+      await trashInDrive(res.id);
+    } catch (err) {
+      out[nombre] = { error: err.message };
+    }
+  }
+
+  // Los archivos ya están en la papelera, pero la subcarpeta que se creó para
+  // probarlas queda. Se manda a la papelera entera, por su nombre: es la que armó
+  // esta prueba y ninguna otra se llama así.
+  try {
+    const [creada] = await buscarSubcarpetas(carpeta, sub[0]);
+    if (creada) await mandarAPapelera(creada.id);
+    out.limpiezaSubcarpeta = creada ? "a la papelera" : "no quedó ninguna";
+  } catch (err) {
+    out.limpiezaSubcarpeta = "NO se pudo borrar: " + err.message;
+  }
+
+  const a = out.appsScript || {};
+  const s = out.sdk || {};
+  out.comparacion = {
+    mismoTipo: a.mimeType === s.mimeType,
+    mismoTamaño: a.tamaño === s.tamaño,
+    // La comparación que de verdad importa: los bytes que quedaron en Drive.
+    mismoContenido: a.contenido === s.contenido,
+    contenidoIntacto: s.contenido === Buffer.from(CONTENIDO).toString("base64"),
+    // Los dos tienen que haber creado —o reusado— la misma subcarpeta.
+    mismaCarpeta: JSON.stringify(a.parents) === JSON.stringify(s.parents),
+    subcarpetaCreada: (s.parents || [])[0] !== carpeta,
+  };
+  return out;
+}
+
+/** Metadatos + contenido real de un archivo de Drive, en base64. */
+async function detalleArchivo(fileId) {
+  const drive = driveApi();
+  const meta = await drive.files.get({
+    fileId,
+    fields: "id,name,mimeType,size,parents",
+    supportsAllDrives: true,
+  });
+  const bin = await drive.files.get(
+    { fileId, alt: "media", supportsAllDrives: true },
+    { responseType: "arraybuffer" },
+  );
+  return {
+    nombre: meta.data.name,
+    mimeType: meta.data.mimeType,
+    tamaño: Number(meta.data.size),
+    parents: meta.data.parents || [],
+    contenido: Buffer.from(bin.data).toString("base64"),
+  };
 }
 
 export async function POST() {
@@ -117,8 +238,7 @@ export async function POST() {
   const salida = { carpetas: { A, B } };
   let fileId = null;
   try {
-    const file = new File(["probe-e"], "ZZ probe-e (borrar).txt", { type: "text/plain" });
-    const up = await uploadToDrive(file, A);
+    const up = await subirDePrueba("ZZ probe-e (borrar).txt", A);
     fileId = up.id;
     salida.archivo = fileId;
     salida.pasos = await pasos(fileId, A, B);
@@ -137,6 +257,11 @@ export async function POST() {
     };
 
     salida.borrado = await probarBorrado(A);
+
+    // Subcarpetas: la ruta que arma Medidores para un respaldo, <medidor>/<mes>. El
+    // nombre lleva una comilla a propósito — sale de un campo que tipea el usuario y
+    // rompería la query de Drive si no se escapara.
+    salida.subida = await probarSubida(A, ["ZZ probe-e Medidor d'prueba", "2026-08"]);
   } catch (err) {
     salida.error = err.message;
   } finally {
