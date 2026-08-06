@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { appsScriptPost } from "@/lib/apps-script";
 import { SDK_POST } from "@/lib/google/actions";
 import { getDriveFolders } from "@/lib/drive-folders";
-import { padresDe } from "@/lib/google/drive-api";
+import { estadoArchivo, padresDe } from "@/lib/google/drive-api";
 import { trashInDrive, uploadToDrive } from "@/lib/drive";
 
 // Verifica el bloque E: las actions de Drive, comparando el EFECTO sobre Drive y no
@@ -59,6 +59,46 @@ async function pasos(fileId, A, B) {
   return out;
 }
 
+/**
+ * `deleteFile` por los dos backends, sobre un archivo cada uno.
+ *
+ * No se puede comparar sobre el MISMO archivo: el primero que corra lo deja en la
+ * papelera y el segundo no tendría nada que probar. Así que se sube uno para cada
+ * uno y se compara el estado final, que es el único efecto observable — `trashed`.
+ *
+ * Los dos archivos quedan en la papelera al terminar, que es exactamente lo que la
+ * prueba verifica: no hace falta limpiarlos aparte.
+ */
+async function probarBorrado(carpeta) {
+  const casos = [
+    ["appsScript", (fileId) => appsScriptPost({ action: "deleteFile", fileId })],
+    ["sdk", (fileId) => SDK_POST.deleteFile({ fileId })],
+  ];
+  const out = {};
+  for (const [nombre, borrar] of casos) {
+    try {
+      const file = new File(["probe-e"], `ZZ probe-e ${nombre} (borrar).txt`, {
+        type: "text/plain",
+      });
+      const up = await uploadToDrive(file, carpeta);
+      const antes = await estadoArchivo(up.id);
+      await borrar(up.id);
+      const despues = await estadoArchivo(up.id);
+      out[nombre] = {
+        fileId: up.id,
+        antes: antes.trashed,
+        despues: despues.trashed,
+        // Lo que tiene que pasar: estaba fuera de la papelera y quedó adentro.
+        ok: antes.trashed === false && despues.trashed === true,
+      };
+    } catch (err) {
+      out[nombre] = { ok: false, error: err.message };
+    }
+  }
+  out.mismoEfecto = out.appsScript?.despues === out.sdk?.despues;
+  return out;
+}
+
 export async function POST() {
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "solo disponible en desarrollo" }, { status: 404 });
@@ -95,6 +135,8 @@ export async function POST() {
       // huérfano.
       moverADondeYaEsta: igual("sdk A→A", A),
     };
+
+    salida.borrado = await probarBorrado(A);
   } catch (err) {
     salida.error = err.message;
   } finally {
