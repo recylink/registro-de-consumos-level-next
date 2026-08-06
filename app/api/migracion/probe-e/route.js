@@ -1,0 +1,112 @@
+import { NextResponse } from "next/server";
+import { appsScriptPost } from "@/lib/apps-script";
+import { SDK_POST } from "@/lib/google/actions";
+import { getDriveFolders } from "@/lib/drive-folders";
+import { padresDe } from "@/lib/google/drive-api";
+import { trashInDrive, uploadToDrive } from "@/lib/drive";
+
+// Verifica el bloque E: las actions de Drive, comparando el EFECTO sobre Drive y no
+// la respuesta. Las dos contestan `{ ok: true }` hagan lo que hagan, así que
+// comparar respuestas no prueba nada.
+//
+//   curl -s -X POST http://localhost:3000/api/migracion/probe-e
+//
+// QUÉ SE COMPARA
+//
+// Un movimiento tiene un solo efecto observable: en qué carpetas queda el archivo.
+// Se sube un archivo de prueba a la carpeta A y se lo mueve A→B con un backend y
+// B→A con el otro, mirando los padres después de cada paso. Si los dos backends
+// dejan el archivo en el mismo lugar, `move` hace lo mismo por los dos caminos.
+//
+// Se prueba además el caso que la implementación nueva trata distinto: mover un
+// archivo a la carpeta en la que YA está. El Apps Script hacía addFile y después
+// removeFile del mismo padre, y en una Unidad compartida eso puede dejar al archivo
+// sin ninguna carpeta; el SDK ignora el removeParents cuando coincide con el
+// addParents. Acá se verifica que el archivo siga teniendo un padre después.
+//
+// El archivo de prueba lo sube el Apps Script y lo borra el Apps Script: la app
+// todavía sube por ahí, y así la prueba no depende de `upload`, que se migra aparte.
+//
+// Solo en desarrollo.
+
+export const dynamic = "force-dynamic";
+
+async function pasos(fileId, A, B) {
+  const out = [];
+  // Un paso que falla no corta la prueba: el fallo ES el dato. Desde que las
+  // carpetas viven en una Unidad compartida, el paso del Apps Script falla siempre
+  // —`addFile`/`removeFile` de DriveApp no soportan unidades compartidas— y eso es
+  // justamente lo que hay que dejar registrado.
+  const correr = async (paso, fn) => {
+    let error = null;
+    try {
+      await fn();
+    } catch (err) {
+      error = err.message;
+    }
+    out.push({ paso, error, carpetas: await padresDe(fileId) });
+  };
+
+  await correr("inicial", () => {});
+  await correr("appsScript A→B", () =>
+    appsScriptPost({ action: "move", fileId, fromFolderId: A, toFolderId: B }),
+  );
+  await correr("sdk A→B", () => SDK_POST.move({ fileId, fromFolderId: A, toFolderId: B }));
+  await correr("sdk B→A", () => SDK_POST.move({ fileId, fromFolderId: B, toFolderId: A }));
+  // Mover a donde ya está. El archivo tiene que seguir teniendo padre.
+  await correr("sdk A→A", () => SDK_POST.move({ fileId, fromFolderId: A, toFolderId: A }));
+
+  return out;
+}
+
+export async function POST() {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "solo disponible en desarrollo" }, { status: 404 });
+  }
+
+  const folders = await getDriveFolders();
+  const A = folders.fotosPorCompletar;
+  const B = folders.fotosProcesados;
+  if (!A || !B) {
+    return NextResponse.json(
+      { error: "faltan las carpetas fotosPorCompletar / fotosProcesados en la config" },
+      { status: 412 },
+    );
+  }
+
+  const salida = { carpetas: { A, B } };
+  let fileId = null;
+  try {
+    const file = new File(["probe-e"], "ZZ probe-e (borrar).txt", { type: "text/plain" });
+    const up = await uploadToDrive(file, A);
+    fileId = up.id;
+    salida.archivo = fileId;
+    salida.pasos = await pasos(fileId, A, B);
+
+    const p = Object.fromEntries(salida.pasos.map((x) => [x.paso, x]));
+    const igual = (paso, carpeta) => JSON.stringify(p[paso]?.carpetas) === JSON.stringify([carpeta]);
+    salida.veredicto = {
+      // El backend viejo ya no puede mover nada de la Unidad compartida. Si esto
+      // dejara de ser cierto, la migración de `move` deja de ser urgente.
+      appsScriptFalla: p["appsScript A→B"]?.error ?? "no falló (¡cambió algo!)",
+      sdkMueveDeIda: igual("sdk A→B", B),
+      sdkMueveDeVuelta: igual("sdk B→A", A),
+      // La trampa: mover a la carpeta donde ya está no puede dejar al archivo
+      // huérfano.
+      moverADondeYaEsta: igual("sdk A→A", A),
+    };
+  } catch (err) {
+    salida.error = err.message;
+  } finally {
+    if (fileId) {
+      try {
+        await trashInDrive(fileId);
+        salida.limpieza = "a la papelera";
+      } catch (err) {
+        salida.limpieza = "QUEDÓ SIN BORRAR " + fileId + ": " + err.message;
+      }
+    }
+  }
+
+  return NextResponse.json(salida);
+}
