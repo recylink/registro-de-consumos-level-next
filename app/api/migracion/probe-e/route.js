@@ -30,8 +30,14 @@ import { trashInDrive, uploadToDrive } from "@/lib/drive";
 // sin ninguna carpeta; el SDK ignora el removeParents cuando coincide con el
 // addParents. Acá se verifica que el archivo siga teniendo un padre después.
 //
-// El archivo de prueba lo sube el Apps Script y lo borra el Apps Script: la app
-// todavía sube por ahí, y así la prueba no depende de `upload`, que se migra aparte.
+// El archivo de prueba se sube y se borra por `uploadToDrive`/`trashInDrive`, o sea
+// por el camino real de la app: cuando se escribió esto ese camino era el /exec, para
+// que la prueba de `move` no dependiera de `upload`, que se migraba aparte.
+//
+// YA NO SE PUEDE CORRER. El script `v6` retiró `upload`, `move` y `deleteFile`, así
+// que el lado "Apps Script" de la comparación falla entero. Queda como registro de
+// cómo se verificó el bloque, no como algo re-ejecutable. Ver ARQUITECTURA.md →
+// "Verificación".
 //
 // Solo en desarrollo.
 
@@ -56,7 +62,8 @@ async function conReintento(fn, intentos = 3) {
   throw ultimo;
 }
 
-/** Sube el archivo de prueba. Hoy sale por el /exec, así que lleva reintento. */
+/** Sube el archivo de prueba por el camino real de la app. El reintento es de cuando
+ *  ese camino era el /exec. */
 function subirDePrueba(nombre, carpeta, contenido = "probe-e") {
   return conReintento(() =>
     uploadToDrive(new File([contenido], nombre, { type: "text/plain" }), carpeta),

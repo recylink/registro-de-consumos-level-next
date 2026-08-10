@@ -34,6 +34,13 @@ import { leerHoja } from "@/lib/google/sheets-api";
 // cambia ningún ID. Se corre el del SDK dos veces sobre la misma raíz y se comparan
 // los IDs con los de la primera pasada.
 //
+// LA COMPARACIÓN YA NO CORRE: el script `v6` retiró `setup`, así que el lado viejo
+// responde "action retirada" y `mismasClaves`/`mismoArbol` quedan en false. Lo que
+// sigue sirviendo es el resto —forma de la respuesta e idempotencia del SDK—, y esto
+// queda como registro de cómo se verificó la paridad antes del recorte.
+//
+// Para PROVISIONAR una instancia esto no es lo que se corre: es /api/migracion/setup.
+//
 // Solo en desarrollo.
 
 export const dynamic = "force-dynamic";

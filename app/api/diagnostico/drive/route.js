@@ -13,6 +13,13 @@ import { trashInDrive, uploadToDrive } from "@/lib/drive";
 // Si es cierta, bloquea `upload`. Pero NO bloquea `move` ni `deleteFile`, que
 // operan sobre archivos ya existentes — esa distinción se me había pasado.
 //
+// RESULTADO (2026-08-06): la creencia era cierta —`storageQuota.limit: "0"`—, y de paso
+// apareció que la API de Drive tampoco estaba habilitada en el proyecto de Cloud. Las
+// carpetas de la app se movieron a una Unidad compartida y con eso el bloque quedó
+// desbloqueado. Los veredictos de abajo están redactados en futuro porque se escribieron
+// antes; se dejan tal cual, que es el registro de qué se midió. Sigue sirviendo para
+// diagnosticar una instancia nueva mal configurada.
+//
 // Fases, de menos a más invasivo. Cada una solo corre si la anterior lo permite:
 //
 //   1. Identidad y cuota de la cuenta (about) — solo lectura.
@@ -194,13 +201,18 @@ export async function GET() {
   //
   // La fase 4 nunca corre mientras crear falle por cuota, y así `move` y
   // `deleteFile` quedaban sin medir por depender de una limitación que no las
-  // afecta: operan sobre archivos que ya existen. Acá el archivo lo crea el Apps
-  // Script —que corre como el dueño de la carpeta y sí tiene cuota, es lo que hace
-  // hoy la app— y el SDK solo lo mueve y lo borra. Es exactamente el reparto que
-  // tendría la migración si `upload` se quedara en el .gs.
+  // afecta: operan sobre archivos que ya existen. Acá el archivo lo creaba el Apps
+  // Script —que corre como el dueño de la carpeta y sí tiene cuota— y el SDK solo lo
+  // movía y lo borraba. Es el reparto que habría tenido la migración si `upload` se
+  // quedaba en el .gs.
   //
   // Un archivo ajeno no es lo mismo que uno propio: la service account es Editor de
   // la carpeta, no dueña del archivo, y Drive distingue las dos cosas al borrar.
+  //
+  // YA NO MIDE ESO. `uploadToDrive` es el camino real de la app y hoy sale por el
+  // SDK, así que el archivo lo crea la propia service account y de ajeno no tiene
+  // nada. La fase quedó como una segunda pasada de crear/mover/papelera. Volver a
+  // medir el caso ajeno exige un archivo subido por una persona, no por la app.
   if (carpetas.length) {
     const origen = carpetas[0];
     const otra = carpetas[1] || carpetas[0];
@@ -212,9 +224,9 @@ export async function GET() {
       });
       const up = await uploadToDrive(file, origen.id);
       fileId = up.id;
-      fase.creadoPorAppsScript = { ok: true, fileId };
+      fase.creadoPorLaApp ={ ok: true, fileId };
     } catch (err) {
-      fase.creadoPorAppsScript = { ok: false, error: err.message };
+      fase.creadoPorLaApp ={ ok: false, error: err.message };
     }
 
     if (fileId) {
@@ -241,18 +253,20 @@ export async function GET() {
       } catch (err) {
         fase.papeleraPorSdk = { puede: false, error: err.message };
       }
-      // Limpieza. Si el SDK no puede tocar el archivo ajeno, la prueba no puede
-      // dejarlo tirado en la carpeta: se limpia por el Apps Script, que corre como
-      // el dueño. Es el mismo `deleteFile` que usa el botón de borrar de la app.
+      // Limpieza. El `files.delete` falla siempre en la Unidad compartida: el permiso
+      // de la service account trae `canDelete: false`, así que puede mandar a la
+      // papelera pero no eliminar. El fallback es `trashInDrive`, el mismo camino que
+      // el botón de borrar de la app — que también manda a la papelera y no elimina.
       try {
         await drive.files.delete({ fileId, supportsAllDrives: true });
         fase.limpieza = "eliminado por el SDK";
       } catch (errSdk) {
         try {
           await trashInDrive(fileId);
-          fase.limpieza = "el SDK no pudo (" + errSdk.message + "); a la papelera por Apps Script";
-        } catch (errGs) {
-          fase.limpieza = "QUEDÓ SIN BORRAR " + fileId + ": SDK " + errSdk.message + " / Apps Script " + errGs.message;
+          fase.limpieza = "no se pudo eliminar (" + errSdk.message + "); queda en la papelera";
+        } catch (errBorrar) {
+          fase.limpieza =
+            "QUEDÓ SIN BORRAR " + fileId + ": eliminar " + errSdk.message + " / papelera " + errBorrar.message;
         }
       }
     }

@@ -37,8 +37,9 @@ Inicio · Dashboard · Matriz de carga · Impacto · Factores · Metas · Regist
 · Configuración · Editar sucursal · Puesta en marcha · **Medidores** · **Medidores
 móvil**.
 
-Nada se ha verificado todavía contra datos reales: el port se validó con datos
-sintéticos y con el build.
+Las pantallas se validaron con datos sintéticos y con el build. La capa de datos sí
+está verificada contra la planilla real: la migración al SDK se fue midiendo action
+por action con los endpoints de `/api/migracion/` (ver "Verificación").
 
 ## Módulo Medidores
 
@@ -147,31 +148,50 @@ el mensaje real, y estos son justamente los que el usuario necesita ver
 ("backend no configurado", "carpeta sin configurar").
 
 **Los IDs de Drive no son configuración de deploy.** Son ~25 y crecen con cada
-proveedor. La acción `setup` del Apps Script crea el árbol bajo una carpeta raíz
-y guarda el mapa en la clave `driveFolders` de la hoja "Config". Agregar un
-proveedor no obliga a redeployar la app.
+proveedor. La provisión (`setup`) crea el árbol bajo una carpeta raíz y guarda el
+mapa en la clave `driveFolders` de la hoja "Config". Agregar un proveedor no obliga
+a redeployar la app.
 
 ## Puesta en marcha de una instancia
 
-1. Planilla nueva y vacía en Google Sheets. Las pestañas las crea el script.
-2. Extensiones → Apps Script → pegar `apps-script.gs` completo → guardar.
-3. Implementar → Nueva implementación → Aplicación web, ejecutar como **yo**,
-   acceso **cualquier usuario** → autorizar → copiar la URL `/exec`.
-4. Una carpeta raíz en Drive. Copiar su ID (el tramo después de `/folders/`).
-5. Provisión (idempotente). **Sin `-X POST`**: el `/exec` responde 302 al
-   `googleusercontent` que sirve el resultado, y `-X` fuerza a repetir el POST
-   contra ese destino, que responde 411 (o una página HTML de Google). Con `-d`
-   la primera petición ya es POST y el redirect se sigue como GET, que es lo que
-   Apps Script espera:
+La provisión la corre la app con la service account, **desde local**. Antes se hacía
+con un `curl` al `/exec`; la action `setup` se retiró del script en `v6` porque
+reescribía el mapa de carpetas de la instancia y no le pedía credenciales a nadie.
+
+1. Planilla nueva y vacía en Google Sheets. Las pestañas las crea la app.
+2. Service account en el proyecto de Cloud, con la **API de Sheets y la de Drive
+   habilitadas** (las dos: con la de Drive apagada, Sheets funciona y Drive falla con
+   un error que no la menciona). Descargar el JSON de la clave.
+3. Compartir la planilla con `GOOGLE_CLIENT_EMAIL` como **Editor**, o toda lectura
+   responde 403 "The caller does not have permission".
+4. Una carpeta raíz en Drive, **dentro de una Unidad compartida**, con la service
+   account como miembro con permiso de escritura. En "Mi unidad" de una persona no
+   sirve: una service account no tiene cuota propia y no puede crear archivos ahí.
+   Copiar el ID de la carpeta (el tramo después de `/folders/`).
+5. `cp .env.local.example .env.local` y completar `GOOGLE_CLIENT_EMAIL`,
+   `GOOGLE_PRIVATE_KEY`, `SPREADSHEET_ID` y `RC_SDK_ACTIONS`.
+6. Provisión (idempotente: correrla de nuevo devuelve los mismos IDs). Crea las hojas
+   y el árbol de ~25 carpetas, y deja los IDs en la clave `driveFolders` de la hoja
+   "Config":
    ```sh
-   curl -sL "<URL>/exec" -H "Content-Type: text/plain" \
-     -d '{"action":"setup","rootFolderId":"<ID de la carpeta raíz>"}'
+   npm run dev
+   curl -s  http://localhost:3000/api/migracion/setup            # informe, no escribe
+   curl -s -X POST 'http://localhost:3000/api/migracion/setup?rootFolderId=<ID>'
    ```
-   Con payloads que lleven base64 o acentos, mándalos desde archivo
-   (`--data-binary @payload.json`) para que no los rompa el shell.
-6. `cp .env.local.example .env.local` y poner `APPS_SCRIPT_URL`.
-7. Verificar: `curl -s localhost:3000/api/health` debe responder con
-   `"version": "v4"`.
+   Sobre una instancia ya provisionada el POST responde 409 y hay que repetirlo con
+   `&forzar=si`. No es burocracia: sobre **otra** raíz `setup` no falla ni avisa —crea
+   un árbol nuevo y reescribe el mapa—, y la app quedaría subiendo a las carpetas
+   nuevas con los adjuntos viejos inalcanzables. Con `forzar` la respuesta trae
+   `cambios` (las claves cuyo ID quedó distinto) y `antes` (el valor anterior, crudo,
+   para volver atrás).
+7. El correo de "foto pendiente" es lo único que sigue en Apps Script, así que hace
+   falta el `/exec`: Extensiones → Apps Script → pegar `apps-script.gs` → Implementar
+   → Aplicación web, ejecutar como **yo**, acceso **cualquier usuario** → autorizar →
+   copiar la URL en `APPS_SCRIPT_URL`. Los destinatarios van en la clave
+   `fotoNotifEmails` de la hoja "Config".
+8. Verificar: `curl -s localhost:3000/api/health` responde con los dos backends. El
+   lado Apps Script debe traer `"version": "v6"`; si trae una anterior, la
+   implementación quedó apuntando a una versión vieja del script.
 
 ## Backend: migración de Apps Script al SDK de Google APIs
 
@@ -181,10 +201,16 @@ que era una aplicación web con acceso "cualquier usuario", o sea un endpoint
 público que aceptaba escrituras de quien tuviera la URL. El objetivo de fondo es
 que los archivos de Drive puedan ser privados.
 
-Va **de a una action**, con los dos backends conviviendo. La costura son `apiGet` y
+Fue **de a una action**, con los dos backends conviviendo. La costura son `apiGet` y
 `apiPost` de `lib/apps-script.js`: enrutan por action según la env var
 `RC_SDK_ACTIONS`, así que migrar una no toca ninguno de los ocho consumidores de
 `lib/`, y sacarla de esa lista la revierte sin revertir código.
+
+**Cerrada el 2026-08-10**, salvo `notifyFotoPending`. De las 24 actions del `.gs`, 23
+las sirve el SDK y el script quedó con dos (`notifyFotoPending` y `ping`, script `v6`).
+El interruptor no se retira: mientras `RC_SDK_ACTIONS` siga siendo una lista por
+nombre, sacar una action de ahí la manda de vuelta al `/exec` — pero eso hoy ya no es
+una vuelta atrás real, porque el script no las implementa.
 
 | Bloque | Actions | Estado |
 |--------|---------|--------|
@@ -193,9 +219,9 @@ Va **de a una action**, con los dos backends conviviendo. La costura son `apiGet
 | C | `setConfig` | migrado |
 | C' | las 3 de Medidores (`setSheetRows`) · `setEmissions` · `setConfigSucursales` | **reemplazadas**, no traducidas — ver abajo |
 | D | `upsertSucursal` · `deleteSucursal` | migrado |
-| E | `upload` · `move` · `deleteFile` | **bloqueado**: la API de Drive no está habilitada en el proyecto de Google Cloud (ver abajo) |
+| E | `upload` · `move` · `deleteFile` | migrado |
 | F | `notifyFotoPending` | **se queda en Apps Script**, por decisión — `MailApp` no existe en el SDK |
-| G | `init` migrada · `setup` bloqueado con E | `setup` crea el árbol de carpetas de Drive |
+| G | `init` · `setup` | migrado |
 
 **La excepción a la fidelidad.** Todo lo demás replica su action del `.gs` firma
 por firma, para que la migración fuera comparable contra el backend viejo. Los
@@ -245,18 +271,25 @@ romper la lectura.
 `sheets-api.js` (helpers de bajo nivel), `actions.js` (una entrada por action) y
 `headers.js` (los encabezados que el `.gs` tenía en `WEB_CFG.HEADERS`).
 
-### Lo que falta, y por qué
+### Drive: cómo se desbloqueó
 
-**Drive (`upload`, `move`, `deleteFile`, y la mitad de `setup`).** El primer
-diagnóstico fue equivocado: se dio por sentado que el bloqueo era la falta de cuota
-de almacenamiento de una service account. Medido con `/api/diagnostico/drive`, el
-error real es que la **API de Drive no está habilitada** en el proyecto de Google
-Cloud `recylink` (551899594359) — la de Sheets sí lo está. Hasta habilitarla no se
-sabe si la cuota es además un problema. Y si lo fuera, solo afectaría a *crear*:
-`move` y `deleteFile` operan sobre archivos existentes.
+El bloque estuvo parado semanas y el primer diagnóstico fue equivocado dos veces.
+Primero se dio por sentado que el problema era la cuota de almacenamiento de una
+service account; medido con `/api/diagnostico/drive`, apareció que además la **API de
+Drive no estaba habilitada** en el proyecto de Cloud `recylink` (551899594359) — la de
+Sheets sí. Habilitarla destapó el problema real, que sí era la cuota:
+`storageQuota.limit: "0"`. Una service account no puede crear archivos en "Mi unidad"
+de nadie, ni mandar a la papelera lo que no es suyo.
 
-**Mail (`notifyFotoPending`).** Se queda en el Apps Script a propósito.
-`MailApp` no tiene equivalente en el SDK, y las alternativas (API de Gmail con
+Lo que lo resolvió, el **2026-08-06**, fue mover las carpetas de la app a una **Unidad
+compartida**: adentro los archivos son de la unidad y no de quien los crea, así que la
+falta de cuota deja de importar. El precio es un flag: **todas** las llamadas a Drive
+llevan `supportsAllDrives: true`, y sin él la API contesta "File not found" sobre un
+archivo que está ahí — un error que se diagnostica como permisos y no lo es
+(`lib/google/drive-api.js`).
+
+**Mail (`notifyFotoPending`), lo único que no se migra.** Se queda en el Apps Script a
+propósito. `MailApp` no tiene equivalente en el SDK, y las alternativas (API de Gmail con
 delegación de dominio, o un proveedor tipo Resend) cuestan más que el beneficio
 para una sola notificación. Consecuencia: `APPS_SCRIPT_URL` sigue siendo
 **requerida**, y el `/exec` no se puede dar de baja.
@@ -274,23 +307,34 @@ app quita el modo de falla accidental —dos usuarios legítimos pisándose—, 
 deliberado.
 
 **Y el cierre no estaba bloqueado por Drive, como se creyó un tiempo.** Solo cuatro
-actions dependen de Workspace. Las otras 20 se podían retirar de inmediato. `v5` hace
-eso: el script pasa de 26 actions a 6.
+actions dependían de Workspace. Las otras 20 se podían retirar de inmediato, y `v5`
+hizo eso: de 26 actions a 6. Con Drive desbloqueado, `v6` retira las cuatro que
+quedaban de Workspace y el script baja a **dos**:
 
 | Sigue | Por qué |
 |-------|---------|
-| `upload` · `move` · `deleteFile` | la API de Drive no está habilitada en el proyecto de Cloud |
 | `notifyFotoPending` | `MailApp` no existe en el SDK |
-| `setup` | crea el árbol de carpetas de Drive; depende de lo mismo |
 | `ping` | versión desplegada, para `/api/health` |
 
-Ninguna de las seis puede tocar los datos de consumo. Además `doGet` sin `action` ya no
-hace `read` por defecto — un GET pelado a la URL devolvía la planilla completa.
+**La que más importaba retirar era `setup`.** Escribe la clave `driveFolders` de la hoja
+"Config" con los IDs del árbol que cuelgue del `rootFolderId` que reciba, y no había nada
+que validara ese ID: cualquiera con la URL podía apuntarla a una carpeta propia y la app
+habría empezado a subir ahí los documentos de la empresa, sin ningún error a la vista. Es
+el único de los seis casos donde la action retirada era una toma de control, no una
+filtración. Su reemplazo es `POST /api/migracion/setup`, que se corre desde local con la
+service account — ver "Puesta en marcha".
 
-Lo que **no** se hizo: borrar las funciones de Sheets del archivo. `setup` depende de
-varias y el grafo de dependencias no se puede verificar sin correr el script. Ya no son
-alcanzables por HTTP, que es lo que importa; borrarlas es limpieza posterior, desde el
-editor donde se puede ejecutar.
+De lo que quedó, ninguna toca los datos de consumo: una manda un correo y la otra dice
+qué versión corre. Además, desde `v5`, `doGet` sin `action` ya no hace `read` por defecto
+— un GET pelado a la URL devolvía la planilla completa.
+
+Lo que **no** se hizo: borrar el código inalcanzable. Lo que corre de verdad son cuatro
+funciones (`doGet` → `ping`, y `doPost` → `notifyFotoPending` → `getConfigValue` →
+`rcSpreadsheet`); todo el resto del archivo ya no se puede ejecutar por HTTP. Pero este
+script convive con otros archivos en el mismo proyecto de Apps Script —el procesador de
+Combustible, de donde viene el choque de nombres que obligó a llamarlo `WEB_CFG`— y esos
+archivos pueden llamar a cualquiera de estas funciones sin que se vea desde el repo.
+Borrarlas es una limpieza que se hace en el editor, mirando los otros archivos.
 
 Recortar es editar el `.gs`, subir `SCRIPT_VERSION` y re-implementar como nueva versión
 de la implementación existente — la URL no cambia.
@@ -325,32 +369,40 @@ desarrollo, todos bajo `/api/migracion/`:
 | `probe-c` | reescrituras: crear, encoger, vaciar, crecer |
 | `probe-d` | filas por sucursal, con copia y restauración de la hoja real |
 | `invalidar` | limpia las etiquetas de caché, para medir en frío |
+| `probe-e` | Drive: `upload`/`move`/`deleteFile`, comparando el efecto en Drive y no la respuesta |
+| `probe-g` | `init`: idempotencia y encabezado correcto al recrear una hoja |
+| `probe-setup` | `setup`: mismas claves y mismo árbol de nombres, cada backend sobre una raíz de juguete |
 | `columna-id` | GET: informe de qué filas les falta el ID. POST `?aplicar=si`: lo agrega |
 | `lectura-cruda` | GET: qué celdas se leerían distinto al pasar a `UNFORMATTED_VALUE` |
+| `setup` | no es una prueba: es la provisión de una instancia (ver "Puesta en marcha") |
 
-**`diff`, `probe-b`, `probe-c` y `probe-d` dejan de funcionar con el script `v5`.**
-Escriben y leen por el `/exec` para comparar los dos backends, y esas actions se
-retiraron. Su trabajo ya está hecho: dejaron el registro de paridad que justificó cada
-action migrada. Se conservan como documentación de cómo se verificó, no como algo que
-se pueda volver a correr. Correrlos exige volver a un script anterior, y eso significa
-reabrir el endpoint.
+**Los que comparan los dos backends dejan de funcionar a medida que el `/exec` se
+recorta.** `diff`, `probe-b`, `probe-c` y `probe-d` se cayeron con `v5`; `probe-e` y la
+mitad de `probe-setup` (la que corre el backend viejo), con `v6`. Escriben y leen por el
+`/exec`, y esas actions ya no existen. Su trabajo está hecho: dejaron el registro de
+paridad que justificó cada action migrada. Se conservan como documentación de cómo se
+verificó, no como algo que se pueda volver a correr — correrlos exige volver a un script
+anterior, y eso significa reabrir el endpoint.
 
-Los dos últimos no son pruebas sino herramientas de migración. `columna-id` es el
-único que escribe en la planilla real, y solo con `?aplicar=si`: es idempotente
+Los últimos tres no son pruebas sino herramientas. `columna-id` y `setup` son los únicos
+que escriben en la planilla real. `columna-id` solo con `?aplicar=si`: es idempotente
 (nunca cambia un id ya asignado), verifica después de escribir, y no enciende su flag
-si alguna hoja no verificó. Aun así, duplicar la planilla antes es la única vuelta
-atrás real. `lectura-cruda` no escribe nada.
+si alguna hoja no verificó. `setup` es idempotente sobre la misma raíz y exige
+`&forzar=si` si ya hay un mapa de carpetas. Aun así, duplicar la planilla antes es la
+única vuelta atrás real. `lectura-cruda` no escribe nada.
 
 ### El Apps Script mientras dure
 
-Sigue sirviendo las 5 actions que faltan. Al modificarlo: subir `SCRIPT_VERSION`,
-guardar el snapshot en `appscripts/vN_fecha.gs`, anotar en
+Sigue sirviendo dos actions: `notifyFotoPending` y `ping`. Al modificarlo: subir
+`SCRIPT_VERSION`, guardar el snapshot en `appscripts/vN_fecha.gs`, anotar en
 `appscripts/CHANGELOG.md` y re-implementar como **nueva versión** de la
 implementación existente (la URL no cambia).
 
-`lib/google/headers.js` duplica `WEB_CFG.HEADERS` del `.gs`. Es a propósito
-mientras haya actions en el `/exec`: si se toca una, tocar la otra. Un desajuste
-solo se nota cuando una hoja se crea de cero.
+`lib/google/headers.js` duplica `WEB_CFG.HEADERS` del `.gs`. Ya ningún camino HTTP del
+script crea hojas, así que un desajuste no puede romper la app: la fuente de verdad es
+`headers.js`. La copia del `.gs` importa solo si se corre `setupInstance` o `ensureSheets`
+a mano desde el editor, que es la vuelta atrás si la provisión por SDK falla a mitad de
+camino. Si se toca una, tocar la otra.
 
 ## Correcciones hechas durante el port
 
