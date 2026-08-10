@@ -187,8 +187,10 @@ reescribía el mapa de carpetas de la instancia y no le pedía credenciales a na
 7. El correo de "foto pendiente" es lo único que sigue en Apps Script, así que hace
    falta el `/exec`: Extensiones → Apps Script → pegar `apps-script.gs` → Implementar
    → Aplicación web, ejecutar como **yo**, acceso **cualquier usuario** → autorizar →
-   copiar la URL en `APPS_SCRIPT_URL`. Los destinatarios van en la clave
-   `fotoNotifEmails` de la hoja "Config".
+   copiar la URL en `APPS_SCRIPT_URL`. Los destinatarios se cargan desde la app, en
+   Configuración → "Avisos de cola pendiente"; sin ninguno, la clave
+   `fotoNotifEmails` no existe en la hoja "Config" y el aviso no se manda a nadie,
+   en silencio.
 8. Verificar: `curl -s localhost:3000/api/health` responde con los dos backends. El
    lado Apps Script debe traer `"version": "v6"`; si trae una anterior, la
    implementación quedó apuntando a una versión vieja del script.
