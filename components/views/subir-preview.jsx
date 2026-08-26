@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { Icon } from "@/components/icons";
-import { Btn, Select } from "@/components/ui/controls";
+import { Ayuda, Btn, Select } from "@/components/ui/controls";
 import { Card, Chip, Steps, SectionHead, TypeIndicator } from "@/components/ui/layout";
 import { TYPES, subcatLabel } from "@/lib/domain/catalog";
 import { fmtCLP, fmtDate, fmtMonth, fmtNum } from "@/lib/domain/format";
@@ -237,15 +237,12 @@ export function SubirPreview({ rows, sucursales, hoy, guardando, onUpdate, onDup
                 <th>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
                     Mes
-                    <span className="ob-tooltip-wrap">
-                      <Icon name="info" size={13} style={{ color: "var(--rl-gray-400)" }} />
-                      <span className="ob-tooltip ancho abajo">
-                        No es la fecha de emisión de la boleta, sino el mes que factura. Se toma
-                        el punto medio entre el inicio y el término del período, que siempre cae
-                        en el mes con más días facturados: una boleta del 3 de marzo al 2 de
-                        abril queda en marzo. Pasa el cursor por una fila para ver su período.
-                      </span>
-                    </span>
+                    <Ayuda>
+                      No es la fecha de emisión de la boleta, sino el mes que factura. Se toma el
+                      punto medio entre el inicio y el término del período, que siempre cae en el
+                      mes con más días facturados: una boleta del 3 de marzo al 2 de abril queda
+                      en marzo. Pasa el cursor por una fila para ver su período.
+                    </Ayuda>
                   </span>
                 </th>
                 <th>Sucursal</th>

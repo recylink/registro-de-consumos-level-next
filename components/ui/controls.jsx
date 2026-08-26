@@ -12,6 +12,64 @@ import { createPortal } from "react-dom";
 import { Icon } from "@/components/icons";
 import { currentMonthISO, todayISO } from "@/lib/domain/today";
 
+/**
+ * Ayuda contextual: un ícono de información que al pasar por encima —o al tocar,
+ * en un teléfono— muestra una explicación.
+ *
+ * El globo se dibuja en <body> con un portal y posición fija, y no dentro del
+ * flujo. Un tooltip posicionado en el flujo queda recortado por cualquier
+ * ancestro con `overflow` distinto de visible, y el caso que lo destapó es
+ * justamente ese: el encabezado de una tabla ancha, que vive dentro de un
+ * contenedor con scroll horizontal. Salir a <body> también lo libra de heredar
+ * estilos del ancestro — en un <th> el texto salía en mayúsculas y a 11px.
+ */
+export function Ayuda({ children, ancho = 280 }) {
+  const [pos, setPos] = useState(null);
+  const ref = useRef(null);
+
+  const mostrar = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    // Centrado en el ícono, pero sin salirse por los costados de la ventana.
+    const margen = 8;
+    const medio = r.left + r.width / 2;
+    const min = ancho / 2 + margen;
+    const max = window.innerWidth - ancho / 2 - margen;
+    setPos({ top: r.bottom + 8, left: Math.min(Math.max(medio, min), Math.max(min, max)) });
+  };
+
+  const ocultar = () => setPos(null);
+
+  return (
+    <span
+      ref={ref}
+      className="rc-ayuda"
+      tabIndex={0}
+      role="button"
+      aria-label="Ayuda"
+      onMouseEnter={mostrar}
+      onMouseLeave={ocultar}
+      onFocus={mostrar}
+      onBlur={ocultar}
+      // En un teléfono no hay "pasar por encima": se toca para abrir y cerrar.
+      // El stopPropagation evita que el toque active además la celda de abajo.
+      onClick={(e) => {
+        e.stopPropagation();
+        pos ? ocultar() : mostrar();
+      }}
+    >
+      <Icon name="info" size={13} />
+      {pos &&
+        createPortal(
+          <span className="rc-ayuda-globo" style={{ top: pos.top, left: pos.left, width: ancho }}>
+            {children}
+          </span>,
+          document.body,
+        )}
+    </span>
+  );
+}
+
 export function Btn({
   children, kind, size, icon, iconRight, onClick, disabled, style,
   type = "button", title,

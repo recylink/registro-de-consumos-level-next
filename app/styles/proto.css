@@ -968,14 +968,20 @@ textarea.prt-input { height: auto; padding: 12px 14px; line-height: 1.5; resize:
   border: 5px solid transparent; border-top-color: var(--rl-gray-900);
 }
 .ob-tooltip-wrap:hover .ob-tooltip { display: block; }
-/* Variante para explicaciones de más de una línea: el tooltip base es de una
-   sola línea (`nowrap`) y un texto largo se salía de la pantalla. */
-.ob-tooltip.ancho { white-space: normal; width: 280px; text-align: left; font-weight: 400; }
-/* Abre hacia abajo. Necesario cuando el tooltip vive dentro de un contenedor con
-   scroll (una tabla ancha): apuntando hacia arriba desde el encabezado, el
-   contenedor lo recorta. */
-.ob-tooltip.abajo { bottom: auto; top: calc(100% + 8px); }
-.ob-tooltip.abajo::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: var(--rl-gray-900); }
+
+/* Ayuda contextual (componente Ayuda). El globo se dibuja en <body>, así que no
+   lo recorta ningún contenedor con scroll y no hereda estilos de la celda que lo
+   contiene. Ver el comentario del componente. */
+.rc-ayuda { display: inline-flex; align-items: center; cursor: help; color: var(--rl-gray-400); }
+.rc-ayuda:hover, .rc-ayuda:focus-visible { color: var(--rl-gray-600); }
+.rc-ayuda-globo {
+  position: fixed; z-index: 1000; transform: translateX(-50%);
+  padding: 10px 12px; border-radius: 8px;
+  background: var(--rl-gray-900); color: #FFFFFF;
+  font: 400 12px/17px var(--rl-font-body);
+  text-align: left; text-transform: none; letter-spacing: normal;
+  box-shadow: var(--rl-shadow-lg); pointer-events: none;
+}
 
 /* Summary (step 4) */
 .ob-summary-emp-ico {
