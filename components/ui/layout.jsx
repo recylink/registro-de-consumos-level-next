@@ -25,13 +25,13 @@ export function Card({ children, style, flush, bordered, className }) {
 
 export function SectionHead({ eyebrow, title, sub, right }) {
   return (
-    <div className="prt-spread" style={{ marginBottom: 18 }}>
-      <div>
+    <div className="prt-spread prt-sectionhead">
+      <div className="prt-sectionhead-text">
         {eyebrow && <div className="prt-eyebrow">{eyebrow}</div>}
         <h1 className="prt-h1" style={{ marginTop: 4 }}>{title}</h1>
         {sub && <div className="prt-muted" style={{ marginTop: 6, maxWidth: 640 }}>{sub}</div>}
       </div>
-      {right && <div className="prt-row">{right}</div>}
+      {right && <div className="prt-row prt-sectionhead-actions">{right}</div>}
     </div>
   );
 }

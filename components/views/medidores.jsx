@@ -225,21 +225,25 @@ function MedidoresInterior({ records, sucursales, mesActual, meses }) {
         title="Lecturas de medidores"
         sub="Registra lecturas físicas por medidor, calcula consumo y costo, y compáralos con el consumo global registrado. Puedes configurar qué medidores son facturables y cuáles no. Estas lecturas y consumos no aportan al cálculo de impacto ambiental."
         right={
-          <div className="prt-row" style={{ gap: 8 }}>
-            <IndicadorGuardado />
-            {listo && meters.length > 0 && (
-              <BotonExcel sucursal={sel.sucursal} type={sel.type} meses={monthsView} />
-            )}
-            <Link className="prt-btn" href="/medidores/movil">
-              <Icon name="smartphone" />
-              Registro móvil
-            </Link>
-            {listo && (
-              <Btn kind="primary" icon="tune" onClick={() => setGestionando(true)}>
-                Gestionar medidores
-              </Btn>
-            )}
-          </div>
+          <>
+            <div className="rc-med-head-meta">
+              <IndicadorGuardado />
+              {listo && meters.length > 0 && (
+                <BotonExcel sucursal={sel.sucursal} type={sel.type} meses={monthsView} />
+              )}
+            </div>
+            <div className="rc-med-head-acciones">
+              <Link className="prt-btn" href="/medidores/movil">
+                <Icon name="smartphone" />
+                Registro móvil
+              </Link>
+              {listo && (
+                <Btn kind="primary" icon="tune" onClick={() => setGestionando(true)}>
+                  Gestionar medidores
+                </Btn>
+              )}
+            </div>
+          </>
         }
       />
 

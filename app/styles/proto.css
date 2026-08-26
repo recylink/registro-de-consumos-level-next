@@ -134,6 +134,13 @@ html, body {
 @media (max-width: 720px) {
   .prt-host-content { padding: 20px 16px 56px; }
   .rc-sidebar-head { padding: 12px 10px; }
+
+  /* El encabezado se apila y el título ocupa el ancho completo. A 28px se comía
+     el alto útil de la pantalla. */
+  .prt-sectionhead { flex-direction: column; align-items: stretch; gap: 14px; margin-bottom: 16px; }
+  .prt-sectionhead-actions { width: 100%; }
+  .prt-sectionhead .prt-h1 { font: 700 22px/28px var(--rl-font-display); }
+  .prt-sectionhead .prt-muted { font-size: 13px; line-height: 19px; }
 }
 
 /* ============================================================
@@ -333,7 +340,15 @@ textarea.prt-input { height: auto; padding: 12px 14px; line-height: 1.5; resize:
    de su caja. Sin esto, cada llamador tenía que acordarse de `flexWrap`. */
 .prt-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .prt-col { display: flex; flex-direction: column; gap: 12px; }
-.prt-spread { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* Envuelve por defecto, misma razón que `.prt-row`: un encabezado cuyo título y
+   botones no caben juntos debe bajar de línea, no salirse de la pantalla. */
+.prt-spread { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+/* Encabezado de sección. El margen estaba inline en el componente; acá se puede
+   ajustar por tamaño de pantalla. */
+.prt-sectionhead { margin-bottom: 18px; }
+.prt-sectionhead-text { min-width: 0; flex: 1 1 320px; }
+.prt-sectionhead-actions { flex: 0 0 auto; }
 .prt-grow { flex: 1; min-width: 0; }
 .prt-divider { height: 1px; background: var(--rl-gray-200); width: 100%; }
 .prt-stack-sm { display: flex; flex-direction: column; gap: 8px; }
@@ -1684,6 +1699,11 @@ textarea.prt-input { height: auto; padding: 12px 14px; line-height: 1.5; resize:
 /* Fila propia de tabs (separada de los filtros) */
 .rc-med-tabsrow { margin-bottom: 12px; }
 
+/* Encabezado de Medidores en dos grupos: lo informativo (guardado, Excel) y lo
+   accionable (Registro móvil, Gestionar). En un teléfono no pesan igual. */
+.rc-med-head-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rc-med-head-acciones { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
 /* Loader mientras cargan los medidores desde el Sheet */
 .rc-med-loading {
   display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -2151,8 +2171,16 @@ textarea.prt-input { height: auto; padding: 12px 14px; line-height: 1.5; resize:
   .rc-med-toolbar-left { flex-direction: column; align-items: stretch; }
   .rc-med-tb-group { justify-content: space-between; }
   .rc-med-tb-divider { display: none; }
-  .rc-med-tabs { width: 100%; }
-  .rc-med-tab { flex: 1; justify-content: center; }
+  /* Cuatro pestañas no caben en un teléfono. Antes se repartían el ancho a la
+     fuerza y las etiquetas quedaban ilegibles; ahora la tira se desliza. */
+  .rc-med-tabs { display: flex; width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .rc-med-tabs::-webkit-scrollbar { display: none; }
+  .rc-med-tab { flex: 0 0 auto; }
+
+  /* Encabezado: el título a todo el ancho y los botones abajo. */
+  .rc-med-head-meta { order: -1; width: 100%; }
+  .rc-med-head-acciones { width: 100%; flex-direction: column; align-items: stretch; }
+  .rc-med-head-acciones .prt-btn { width: 100%; }
   .rc-med-addrow { flex-direction: column; align-items: stretch; }
   .rc-med-summary { flex-direction: column; align-items: stretch; }
   .rc-med-summary-right { justify-content: space-between; }
