@@ -22,11 +22,20 @@ import { TYPES } from "@/lib/domain/catalog";
 import { fmtDateTime } from "@/lib/domain/format";
 import { getProviderOptionsFor, getSubcatsFor } from "@/lib/domain/sucursales";
 
+// Sin `refrigerantes`, y acá la razón es más grave que en la configuración.
+//
+// Esta lista tiene un gemelo que hay que mover con ella: la lista blanca de
+// `completeFoto` en lib/sheets/fotos.js:104, que decide para qué tipos se
+// escribe el registro de consumo. Ofrecer acá un tipo que allí no está significa
+// que la foto se marca procesada y el archivo se mueve a "procesados", pero el
+// consumo no se escribe en ninguna parte: sin error y sin aviso. Los dos se
+// cambian juntos o no se cambian.
+//
+// Ver ITEM_TYPES en lib/domain/sucursales.js.
 export const TIPO_OPCIONES = [
   { value: "electricidad", label: "Electricidad" },
   { value: "combustible", label: "Combustible" },
   { value: "agua", label: "Agua" },
-  { value: "refrigerantes", label: "Refrigerantes" },
 ];
 
 export const UNIDADES = ["L", "kg", "m³", "gal", "t", "kWh"];
