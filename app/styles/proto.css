@@ -134,13 +134,6 @@ html, body {
 @media (max-width: 720px) {
   .prt-host-content { padding: 20px 16px 56px; }
   .rc-sidebar-head { padding: 12px 10px; }
-
-  /* El encabezado se apila y el título ocupa el ancho completo. A 28px se comía
-     el alto útil de la pantalla. */
-  .prt-sectionhead { flex-direction: column; align-items: stretch; gap: 14px; margin-bottom: 16px; }
-  .prt-sectionhead-actions { width: 100%; }
-  .prt-sectionhead .prt-h1 { font: 700 22px/28px var(--rl-font-display); }
-  .prt-sectionhead .prt-muted { font-size: 13px; line-height: 19px; }
 }
 
 /* ============================================================
@@ -349,6 +342,20 @@ textarea.prt-input { height: auto; padding: 12px 14px; line-height: 1.5; resize:
 .prt-sectionhead { margin-bottom: 18px; }
 .prt-sectionhead-text { min-width: 0; flex: 1 1 320px; }
 .prt-sectionhead-actions { flex: 0 0 auto; }
+
+/* En teléfono el encabezado se apila. Este bloque va DESPUÉS de las reglas de
+   arriba a propósito: una media query no suma especificidad, así que si fuera
+   antes la regla base ganaría por orden y esto no haría nada. */
+@media (max-width: 720px) {
+  .prt-sectionhead { flex-direction: column; align-items: stretch; gap: 14px; margin-bottom: 16px; }
+  /* En columna el eje principal es el vertical, así que el `flex-basis: 320px`
+     de arriba dejaría de ser ancho mínimo y sería ALTO mínimo. */
+  .prt-sectionhead-text { flex: 0 1 auto; }
+  .prt-sectionhead-actions { width: 100%; }
+  /* 28px se comen el alto útil de una pantalla de teléfono. */
+  .prt-sectionhead .prt-h1 { font: 700 22px/28px var(--rl-font-display); }
+  .prt-sectionhead .prt-muted { font-size: 13px; line-height: 19px; }
+}
 .prt-grow { flex: 1; min-width: 0; }
 .prt-divider { height: 1px; background: var(--rl-gray-200); width: 100%; }
 .prt-stack-sm { display: flex; flex-direction: column; gap: 8px; }
