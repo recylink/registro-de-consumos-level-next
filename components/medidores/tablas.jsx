@@ -61,6 +61,16 @@ const FILAS_TOTAL = [
   { key: "diferencia", label: "Diferencia" },
 ];
 
+/** Un total de consumo con su unidad, o "—" si no hay con qué calcularlo. */
+function ConsumoTotal({ valor, unidad, signo }) {
+  if (valor == null) return "—";
+  return (
+    <span>
+      {(signo && valor > 0 ? "+" : "") + fmtNum(valor)} <em>{unidad}</em>
+    </span>
+  );
+}
+
 /** Clase de color de una diferencia: bajo $1 se considera cuadrada. */
 const claseDif = (dif) => (Math.abs(dif) < 1 ? "ok" : dif > 0 ? "pos" : "neg");
 
@@ -145,12 +155,34 @@ export function MatrizTab({ suc, type, meters, monthsView, records }) {
                 </td>
                 {monthsView.map((mk) => {
                   const t = monthTotals(meters, M.readings, M.prices, records, suc, type, mk);
-                  let contenido;
-                  let cls = "";
+                  // Dos totales por mes, cada uno bajo la columna que le
+                  // corresponde arriba: el consumo bajo "Consumo" y el dinero
+                  // bajo "Costo". Antes las cuatro subcolumnas se fusionaban en
+                  // una sola celda y solo cabía el dinero.
+                  let consumo;
+                  let clsConsumo = "";
+                  let dinero;
+                  let clsDinero = "";
+
                   if (fila.key === "totalMedidores") {
-                    contenido = t.totalMedidores == null ? "—" : fmtCLP(t.totalMedidores);
+                    consumo = <ConsumoTotal valor={t.consumoMedidores} unidad={t.unidad} />;
+                    dinero = t.totalMedidores == null ? "—" : fmtCLP(t.totalMedidores);
                   } else if (fila.key === "totalBoleta") {
-                    contenido =
+                    consumo = (
+                      <>
+                        <ConsumoTotal valor={t.consumoBoleta} unidad={t.unidad} />
+                        {t.unidadesFuera.length > 0 && (
+                          <span
+                            className="rc-med-hint"
+                            title={`Este mes también tiene boletas en ${t.unidadesFuera.join(" y ")}. No se pueden sumar con ${t.unidad}, así que quedaron fuera de este total.`}
+                          >
+                            {" "}
+                            <Icon name="warning" size={12} />
+                          </span>
+                        )}
+                      </>
+                    );
+                    dinero =
                       t.totalBoleta == null ? (
                         <span className="rc-med-hint" title="No hay consumo global registrado para este mes">
                           <Icon name="warning" size={12} /> falta
@@ -158,16 +190,31 @@ export function MatrizTab({ suc, type, meters, monthsView, records }) {
                       ) : (
                         fmtCLP(t.totalBoleta)
                       );
-                  } else if (t.diferencia == null) {
-                    contenido = "—";
                   } else {
-                    cls = claseDif(t.diferencia);
-                    contenido = (t.diferencia > 0 ? "+" : "") + fmtCLP(t.diferencia);
+                    if (t.difConsumo != null) {
+                      clsConsumo = claseDif(t.difConsumo);
+                      consumo = <ConsumoTotal valor={t.difConsumo} unidad={t.unidad} signo />;
+                    } else {
+                      consumo = "—";
+                    }
+                    if (t.diferencia != null) {
+                      clsDinero = claseDif(t.diferencia);
+                      dinero = (t.diferencia > 0 ? "+" : "") + fmtCLP(t.diferencia);
+                    } else {
+                      dinero = "—";
+                    }
                   }
+
                   return (
-                    <td key={mk} colSpan={4} className={"rc-med-num-cell " + cls}>
-                      {contenido}
-                    </td>
+                    <Fragment key={mk}>
+                      {/* Lectura: no lleva total. Son marcas acumuladas del
+                          medidor, no cantidades que tenga sentido sumar. */}
+                      <td />
+                      <td className={"rc-med-num-cell " + clsConsumo}>{consumo}</td>
+                      <td className={"rc-med-num-cell " + clsDinero}>{dinero}</td>
+                      {/* Docs */}
+                      <td />
+                    </Fragment>
                   );
                 })}
               </tr>
