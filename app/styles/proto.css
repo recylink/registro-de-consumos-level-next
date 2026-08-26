@@ -968,6 +968,14 @@ textarea.prt-input { height: auto; padding: 12px 14px; line-height: 1.5; resize:
   border: 5px solid transparent; border-top-color: var(--rl-gray-900);
 }
 .ob-tooltip-wrap:hover .ob-tooltip { display: block; }
+/* Variante para explicaciones de más de una línea: el tooltip base es de una
+   sola línea (`nowrap`) y un texto largo se salía de la pantalla. */
+.ob-tooltip.ancho { white-space: normal; width: 280px; text-align: left; font-weight: 400; }
+/* Abre hacia abajo. Necesario cuando el tooltip vive dentro de un contenedor con
+   scroll (una tabla ancha): apuntando hacia arriba desde el encabezado, el
+   contenedor lo recorta. */
+.ob-tooltip.abajo { bottom: auto; top: calc(100% + 8px); }
+.ob-tooltip.abajo::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: var(--rl-gray-900); }
 
 /* Summary (step 4) */
 .ob-summary-emp-ico {

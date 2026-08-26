@@ -13,7 +13,7 @@ import { Icon } from "@/components/icons";
 import { Btn, Select } from "@/components/ui/controls";
 import { Card, Chip, Steps, SectionHead, TypeIndicator } from "@/components/ui/layout";
 import { TYPES, subcatLabel } from "@/lib/domain/catalog";
-import { fmtCLP, fmtDate, fmtNum } from "@/lib/domain/format";
+import { fmtCLP, fmtDate, fmtMonth, fmtNum } from "@/lib/domain/format";
 import { activeSucNames, getSubcatsFor } from "@/lib/domain/sucursales";
 
 const PASOS = ["Proveedor", "Subir", "Revisar"];
@@ -38,6 +38,16 @@ function CeldaNum({ value, onChange, onBlur }) {
   );
 }
 
+/**
+ * Período facturado de una fila, para explicar de dónde salió su mes. Los
+ * lectores de PDF lo guardan; el de Excel (Iconstruye) no, y ahí no hay período
+ * que mostrar.
+ */
+function tituloPeriodo(row) {
+  if (!row.periodoInicio || !row.periodoFin) return undefined;
+  return `Período facturado: ${fmtDate(row.periodoInicio)} a ${fmtDate(row.periodoFin)}\nMes asignado por el punto medio: ${fmtDate(row.date)}`;
+}
+
 function FilaPreview({ row, sucursales, hoy, onUpdate, onDuplicar, onEliminar }) {
   const [editando, setEditando] = useState(null);
   const cerrar = () => setEditando(null);
@@ -55,19 +65,27 @@ function FilaPreview({ row, sucursales, hoy, onUpdate, onDuplicar, onEliminar })
         )}
       </td>
 
-      <td onClick={() => setEditando("date")} className={editando === "date" ? "cell-edit" : ""}>
+      <td
+        onClick={() => setEditando("date")}
+        className={editando === "date" ? "cell-edit" : ""}
+        title={tituloPeriodo(row)}
+      >
         {editando === "date" ? (
+          // Selector de mes y no de día: lo que importa del registro es el mes,
+          // y mostrar un mes pero pedir un día al editar era incoherente. Al
+          // corregir a mano se guarda el día 15, igual que en el registro
+          // manual. Sin tocarla se conserva el punto medio que sacó el lector.
           <input
-            type="date"
+            type="month"
             className="rc-cell-input"
-            value={row.date}
+            value={String(row.date || "").slice(0, 7)}
             autoFocus
-            max={hoy}
-            onChange={(e) => onUpdate({ date: e.target.value })}
+            max={String(hoy || "").slice(0, 7)}
+            onChange={(e) => onUpdate({ date: e.target.value ? e.target.value + "-15" : "" })}
             onBlur={cerrar}
           />
         ) : (
-          fmtDate(row.date)
+          fmtMonth(row.date)
         )}
       </td>
 
@@ -216,7 +234,20 @@ export function SubirPreview({ rows, sucursales, hoy, guardando, onUpdate, onDup
             <thead>
               <tr>
                 <th style={{ width: 40 }} />
-                <th>Fecha</th>
+                <th>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    Mes
+                    <span className="ob-tooltip-wrap">
+                      <Icon name="info" size={13} style={{ color: "var(--rl-gray-400)" }} />
+                      <span className="ob-tooltip ancho abajo">
+                        No es la fecha de emisión de la boleta, sino el mes que factura. Se toma
+                        el punto medio entre el inicio y el término del período, que siempre cae
+                        en el mes con más días facturados: una boleta del 3 de marzo al 2 de
+                        abril queda en marzo. Pasa el cursor por una fila para ver su período.
+                      </span>
+                    </span>
+                  </span>
+                </th>
                 <th>Sucursal</th>
                 <th>N° cliente</th>
                 <th>Tipo</th>
