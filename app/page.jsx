@@ -119,7 +119,7 @@ export default async function InicioPage() {
           <div className="rc-home-cta-title">¿Listo para registrar un consumo?</div>
           <div className="rc-home-cta-sub">Elige el modo según el insumo que vas a cargar.</div>
         </div>
-        <div className="prt-row" style={{ gap: 10 }}>
+        <div className="rc-home-cta-actions">
           <Link className="prt-btn" href="/registrar/manual">
             <Icon name="edit" />
             Registrar a mano

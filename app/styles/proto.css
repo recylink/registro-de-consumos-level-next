@@ -329,7 +329,9 @@ textarea.prt-input { height: auto; padding: 12px 14px; line-height: 1.5; resize:
 /* ============================================================
    Layout helpers
    ============================================================ */
-.prt-row { display: flex; align-items: center; gap: 12px; }
+/* Envuelve por defecto: una fila que no cabe baja de línea en vez de salirse
+   de su caja. Sin esto, cada llamador tenía que acordarse de `flexWrap`. */
+.prt-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .prt-col { display: flex; flex-direction: column; gap: 12px; }
 .prt-spread { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .prt-grow { flex: 1; min-width: 0; }
@@ -1234,6 +1236,15 @@ textarea.prt-input { height: auto; padding: 12px 14px; line-height: 1.5; resize:
   font: 500 13px/18px var(--rl-font-body);
   color: var(--rl-gray-600);
   margin-top: 2px;
+}
+.rc-home-cta-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* En teléfono la caja se apila y los botones ocupan el ancho completo: en
+   horizontal el segundo se salía de la caja y de la pantalla. */
+@media (max-width: 720px) {
+  .rc-home-cta { flex-direction: column; align-items: stretch; padding: 20px 18px; }
+  .rc-home-cta-actions { flex-direction: column; align-items: stretch; }
+  .rc-home-cta-actions .prt-btn { width: 100%; }
 }
 
 /* ============================================================
