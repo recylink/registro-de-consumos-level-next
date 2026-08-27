@@ -2084,6 +2084,9 @@ textarea.prt-input { height: auto; padding: 12px 14px; line-height: 1.5; resize:
 .rc-mv-vacio .s { margin-top: 4px; font: 500 13px/1.5 var(--rl-font-body); color: var(--rl-gray-500); }
 
 /* Uploader de respaldo destacado (móvil) */
+/* Dos botones lado a lado: cámara y archivo. */
+.rc-med-respaldo-pick { display: flex; gap: 8px; width: 100%; }
+.rc-med-respaldo-pick .rc-med-respaldo.empty { flex: 1; min-width: 0; }
 .rc-med-respaldo.empty {
   all: unset; box-sizing: border-box; cursor: pointer; width: 100%;
   display: flex; align-items: center; justify-content: center; gap: 8px;

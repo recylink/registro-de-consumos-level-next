@@ -331,6 +331,9 @@ export function RespaldoUploader({ meterId, month }) {
   const [subiendo, setSubiendo] = useState(false);
   // objectURL de la foto recién subida: preview inmediata sin esperar a Drive.
   const [preview, setPreview] = useState(null);
+  // Dos inputs: el de cámara lleva capture, que en Android es lo único que abre
+  // la cámara directo; sin él Chrome va siempre a la galería.
+  const camRef = useRef(null);
   const inputRef = useRef(null);
   const doc = ((M.docs || {})[meterId + "__" + month] || {}).respaldo || null;
 
@@ -361,8 +364,18 @@ export function RespaldoUploader({ meterId, month }) {
   };
 
   const borrar = useBorrarDoc(meterId, month, "respaldo", doc);
-  const input = (
-    <input ref={inputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onPick} />
+  const inputs = (
+    <>
+      <input
+        ref={camRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: "none" }}
+        onChange={onPick}
+      />
+      <input ref={inputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onPick} />
+    </>
   );
 
   if (doc && doc.link) {
@@ -389,33 +402,51 @@ export function RespaldoUploader({ meterId, month }) {
         </a>
         <div className="rc-med-respaldo-actions">
           <button
-            onClick={() => inputRef.current?.click()}
+            onClick={() => camRef.current?.click()}
             disabled={subiendo}
-            title="Reemplazar foto"
-            aria-label="Reemplazar foto"
+            title="Reemplazar con foto nueva"
+            aria-label="Reemplazar con foto nueva"
           >
             {subiendo ? <span className="prt-spinner" /> : <Icon name="photo_camera" size={16} />}
+          </button>
+          <button
+            onClick={() => inputRef.current?.click()}
+            disabled={subiendo}
+            title="Reemplazar con archivo"
+            aria-label="Reemplazar con archivo"
+          >
+            <Icon name="image" size={16} />
           </button>
           <button onClick={borrar.pedir} title="Eliminar respaldo" aria-label="Eliminar respaldo">
             <Icon name="close" size={16} />
           </button>
         </div>
         {borrar.dialog}
-        {input}
+        {inputs}
       </div>
     );
   }
 
   return (
-    <button
-      className="rc-med-respaldo empty"
-      onClick={() => inputRef.current?.click()}
-      disabled={subiendo}
-    >
-      {subiendo ? <span className="prt-spinner" /> : <Icon name="photo_camera" size={18} />}
-      <span>{subiendo ? "Subiendo…" : "Agregar respaldo (foto)"}</span>
-      {input}
-    </button>
+    <div className="rc-med-respaldo-pick">
+      <button
+        className="rc-med-respaldo empty"
+        onClick={() => camRef.current?.click()}
+        disabled={subiendo}
+      >
+        {subiendo ? <span className="prt-spinner" /> : <Icon name="photo_camera" size={18} />}
+        <span>{subiendo ? "Subiendo…" : "Tomar foto"}</span>
+      </button>
+      <button
+        className="rc-med-respaldo empty"
+        onClick={() => inputRef.current?.click()}
+        disabled={subiendo}
+      >
+        <Icon name="image" size={18} />
+        <span>Elegir archivo</span>
+      </button>
+      {inputs}
+    </div>
   );
 }
 
