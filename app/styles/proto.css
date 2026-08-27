@@ -2036,12 +2036,17 @@ textarea.prt-input { height: auto; padding: 12px 14px; line-height: 1.5; resize:
 .rc-mv-nav-pos { font: 600 12px/1 var(--rl-font-body); color: var(--rl-gray-500); font-variant-numeric: tabular-nums; }
 
 /* Barra de acción: se pega abajo para quedar bajo el pulgar sin tapar la lista. */
-.rc-mv-actionbar { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: 12px; margin-top: 18px; padding: 12px 0 14px; background: linear-gradient(to top, var(--rl-bg) 72%, transparent); }
-.rc-mv-actionbar-info { flex: 1; min-width: 0; font: 600 12px/1.3 var(--rl-font-body); color: var(--rl-gray-600); }
+/* Barra inferior fija: fondo transparente. El degradado blanco de antes cortaba
+   en linea recta contra el celeste de la pagina. */
+.rc-mv-actionbar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 18px; padding: 12px 0 14px; background: transparent; }
+.rc-mv-actionbar-info { min-width: 0; text-align: left; font: 600 12px/1.3 var(--rl-font-body); color: var(--rl-gray-600); }
 .rc-mv-actionbar-info .err { display: inline-flex; align-items: center; gap: 5px; color: var(--rl-error-700); }
 .rc-mv-cta { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: none; min-height: 48px; padding: 0 24px; border: none; border-radius: var(--rl-radius-pill); background: var(--rl-action); color: var(--rl-fg-on-brand); font: 700 15px/1 var(--rl-font-display); cursor: pointer; }
 .rc-mv-cta:hover:not(:disabled) { background: var(--rl-action-hover); }
 .rc-mv-cta:disabled { opacity: .5; cursor: not-allowed; }
+/* El CTA de la barra inferior va verde y a todo el ancho. */
+.rc-mv-actionbar .rc-mv-cta { width: 100%; background: var(--rl-success-600); }
+.rc-mv-actionbar .rc-mv-cta:hover:not(:disabled) { background: var(--rl-success-700); }
 
 /* Hoja para saltar de medidor */
 .rc-mv-sheet { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; background: rgba(16, 24, 40, .45); }
