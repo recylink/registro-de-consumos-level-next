@@ -61,7 +61,7 @@ export function FormAcceso({ destino }) {
             margin: "0 0 22px",
           }}
         >
-          Este sitio es privado. Ingresá la contraseña para continuar.
+          Este sitio es privado. Ingresa la contraseña para continuar.
         </p>
 
         <Field label="Contraseña" error={error}>

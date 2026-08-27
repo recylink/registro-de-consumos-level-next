@@ -92,7 +92,7 @@ export async function saveEmissionsPatchAction(patch) {
     if (resumen.borradas > MAX_BORRADOS_EMISIONES) {
       throw new Error(
         `El guardado pedía borrar ${resumen.borradas} filas (máximo ` +
-          `${MAX_BORRADOS_EMISIONES}). No se escribió nada. Recargá la pantalla ` +
+          `${MAX_BORRADOS_EMISIONES}). No se escribió nada. Recarga la pantalla ` +
           `para volver a partir de lo que tiene la planilla.`,
       );
     }

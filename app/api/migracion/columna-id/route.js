@@ -142,7 +142,7 @@ export async function GET() {
       faltan || hojas.some((h) => h.existe && !h.columnaId.conEtiqueta)
         ? "POST con ?aplicar=si"
         : "nada por hacer",
-    recorda: "Duplicar la planilla antes de aplicar. Es la única vuelta atrás.",
+    recuerda: "Duplicar la planilla antes de aplicar. Es la única vuelta atrás.",
   });
 }
 

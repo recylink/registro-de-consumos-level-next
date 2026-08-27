@@ -75,7 +75,7 @@ export async function ingresarAction(formData) {
 
     const clave = await ipDe();
     if (demasiadosIntentos(clave)) {
-      throw new Error("Demasiados intentos. Esperá unos minutos y volvé a probar.");
+      throw new Error("Demasiados intentos. Espera unos minutos y vuelve a probar.");
     }
 
     const password = formData.get("password");

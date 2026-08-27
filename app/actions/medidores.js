@@ -38,7 +38,7 @@ export async function saveMedidoresPatchAction(patch) {
     if (borrados > MAX_BORRADOS) {
       throw new Error(
         `El guardado pedía borrar ${borrados} filas (máximo ${MAX_BORRADOS}). ` +
-          `No se escribió nada. Recargá la pantalla para volver a partir de lo que ` +
+          `No se escribió nada. Recarga la pantalla para volver a partir de lo que ` +
           `tiene la planilla.`,
       );
     }
