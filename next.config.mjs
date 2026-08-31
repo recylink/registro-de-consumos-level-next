@@ -14,6 +14,19 @@ const DEV = process.env.NODE_ENV !== "production";
  * Router. Endurecerlo requiere generar un nonce en proxy.js y propagarlo, que es
  * un cambio bastante mayor que este archivo.
  */
+// Quién puede meter la app dentro de un iframe. Vacío = nadie, que es el default y
+// lo que corresponde salvo que se embeba a propósito.
+//
+// Va en una env var y no fijo acá porque el sitio que embebe cambia por cliente: es
+// configuración de la instancia, como SPREADSHEET_ID. Con la variable vacía, el
+// comportamiento es idéntico al de antes.
+//
+// Se escribe como origen completo, CON esquema: `https://www.recylink.com`. Sin el
+// `https://` el navegador descarta la regla entera y sigue bloqueando, sin decir por
+// qué. Y es el origen del sitio que CONTIENE el iframe, no el de esta app.
+const EMBEBIBLE_EN = String(process.env.FRAME_ANCESTORS || "").trim();
+const FRAME_ANCESTORS = EMBEBIBLE_EN || "'none'";
+
 const CSP_APP = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${DEV ? " 'unsafe-eval'" : ""}`,
@@ -26,7 +39,7 @@ const CSP_APP = [
   "font-src 'self' data:", // las tipografías se sirven desde /fonts
   // La app habla solo con su propio backend por Server Actions.
   `connect-src 'self'${DEV ? " ws:" : ""}`,
-  "frame-ancestors 'none'",
+  `frame-ancestors ${FRAME_ANCESTORS}`,
   "form-action 'self'",
   "base-uri 'self'",
   "object-src 'none'",
@@ -50,14 +63,19 @@ const CSP_REPORTE = [
   "worker-src 'self' blob:",
   "font-src 'self' data:",
   "connect-src 'self'",
-  "frame-ancestors 'none'",
+  `frame-ancestors ${FRAME_ANCESTORS}`,
   "base-uri 'self'",
   "object-src 'none'",
 ].join("; ");
 
 const CABECERAS_BASE = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-  { key: "X-Frame-Options", value: "DENY" },
+  // X-Frame-Options no sabe decir "solo este sitio": sus únicos valores vivos son DENY
+  // y SAMEORIGIN — ALLOW-FROM lo abandonaron todos los navegadores. Así que cuando hay
+  // un sitio autorizado la única salida es NO mandar esta cabecera y dejar que mande
+  // `frame-ancestors`, que sí acepta un origen. Mandar las dos con criterios distintos
+  // no negocia: gana la más restrictiva y el iframe queda bloqueado igual.
+  ...(EMBEBIBLE_EN ? [] : [{ key: "X-Frame-Options", value: "DENY" }]),
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   // La cámara SÍ se usa: el flujo "Tomar foto" en móvil abre la cámara trasera
