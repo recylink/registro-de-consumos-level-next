@@ -11,8 +11,13 @@
     radial-gradient(900px 500px at 50% 0%, var(--rl-primary-50) 0%, transparent 60%),
     var(--rl-gray-100);
   display: grid;
-  place-items: center;
-  padding: 24px;
+  /* Arriba, no al medio. Centrada verticalmente, la tarjeta se apoya en la mitad
+     del alto disponible; dentro de un iframe alto esa mitad cae fuera de la pantalla
+     y hay que hacer scroll para encontrar el campo de la contraseña. Contra el borde
+     superior queda a la vista con cualquier alto de marco.
+     El tope de 56px evita que en una pantalla grande quede pegada al borde. */
+  place-items: start center;
+  padding: min(8vh, 56px) 24px 24px;
 }
 
 .rc-auth-card {
