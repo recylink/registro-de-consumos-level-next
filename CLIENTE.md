@@ -33,11 +33,41 @@ cada cliente nuevo.
       `null`, no pisó nada (2026-08-31)
 - [x] Subir / mover / borrar en Drive verificado de punta a punta con
       `/api/diagnostico/drive`, sin dejar archivos de prueba (2026-08-31)
-- [ ] Desplegado en Vercel con `SITE_PASSWORD`
+- [x] Desplegado en Vercel con `SITE_PASSWORD` (2026-08-31).
+      **https://registro-de-consumos-level-next.vercel.app** — proyecto
+      `registro-de-consumos-level-next` en el scope `recylink`, conectado a GitHub, así
+      que pushear `main` despliega producción. Verificado: `/`, `/dashboard` y
+      `/api/health` redirigen a `/acceso`, y con sesión el dashboard trae Lira 320 y
+      Lira 254 desde la planilla real
 - [ ] Apps Script viejo apagado
 - [ ] Mover la planilla y el PDF viejo a la carpeta nueva — **recién después de apagar
       el viejo**: la planilla tiene el Apps Script del prototipo adentro, y moverla a una
       unidad compartida le cambia el dueño
+
+## Se puede embeber en cualquier sitio
+
+`FRAME_ANCESTORS=*` en las variables de Vercel. Decisión del equipo (2026-09-01): en las
+**copias de cliente** la restricción de iframe no aporta lo suficiente para el estorbo que
+genera. **En NEXT no se toca:** ahí la variable no existe y sigue con `'none'`.
+
+No hay código propio de Level en esto — la variable ya está prevista en `next.config.mjs`,
+y vacía deja el comportamiento cerrado de siempre.
+
+**Ojo, esto NO hace funcionar el login dentro del iframe.** Son problemas distintos: la
+cabecera decide si el marco *muestra* la app; la cookie decide si deja *entrar*. Desde una
+dirección `*.vercel.app` la cookie es de terceros y la contraseña queda en bucle. Eso solo
+lo arregla servir la app desde un subdominio de quien la embebe (ver más abajo).
+
+## Dos trampas del deploy, ya resueltas
+
+**El framework va en `vercel.json`, no en el panel.** `vercel project add` crea el
+proyecto como "Other" con salida `public`, y entonces el build de Next termina bien pero
+**todo responde 404**, incluido `/api/version`. Parece un problema de alias.
+
+**`GOOGLE_PRIVATE_KEY` no lleva las comillas.** En `.env.local` va entre comillas dobles;
+si se cargan a Vercel dentro del valor, el deploy responde
+`error:1E08010C:DECODER routines::unsupported` — el mismo error que da un salto de línea
+real, y que no nombra la causa.
 
 ## Ojo
 
